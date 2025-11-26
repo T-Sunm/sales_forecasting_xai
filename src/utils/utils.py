@@ -7,32 +7,318 @@ import pandas as pd
 import seaborn as sns
 
 
-def fill_misisng_values(df):
-    """Fill NaN values in the 'sales' column with the mean of non-NaN values"""
+def get_value_column(df, possible_columns=None):
+    """
+    Auto-detect the target value column (sales or units).
+
+    Parameters:
+        df: DataFrame to search
+        possible_columns: List of possible column names. Default is ['sales', 'units']
+
+    Returns:
+        str: Name of the found column
+
+    Raises:
+        ValueError: If no matching column is found
+    """
+    if possible_columns is None:
+        possible_columns = ["sales", "units"]
+
+    for col in possible_columns:
+        if col in df.columns:
+            return col
+
+    raise ValueError(f"DataFrame must contain one of: {possible_columns}")
+
+
+def get_nonzero_items(
+    df, store_col="store_nbr", item_col="item_nbr", value_col="units"
+):
+    """
+    Tìm các cặp (Store, Item) thực sự có bán hàng (tổng doanh số > 0).
+
+    Parameters:
+        df: DataFrame chứa dữ liệu bán hàng
+        store_col: Tên cột store (mặc định 'store_nbr', có thể là 'store_id')
+        item_col: Tên cột item (mặc định 'item_nbr', có thể là 'item_id')
+        value_col: Tên cột giá trị (mặc định 'units', có thể là 'sales')
+
+    Returns:
+        DataFrame với 2 cột [store_col, item_col] chứa các cặp có doanh số
+    """
+    # Auto-detect column names if not exist
+    if store_col not in df.columns:
+        store_col = "store_id" if "store_id" in df.columns else "store_nbr"
+    if item_col not in df.columns:
+        item_col = "item_id" if "item_id" in df.columns else "item_nbr"
+    if value_col not in df.columns:
+        value_col = "sales" if "sales" in df.columns else "units"
+
+    # Get unique store IDs
+    store_ids = sorted(df[store_col].unique())
+
+    nonzero_res = {}
+    for store_id in store_ids:
+        store_df = df[df[store_col] == store_id]
+        # Calculate total sales per item
+        item_totals = store_df.groupby(item_col)[value_col].sum().reset_index()
+        # Keep only items with sales > 0
+        nonzero_items = item_totals[item_totals[value_col] > 0]
+        nonzero_res[store_id] = nonzero_items[item_col].values.tolist()
+
+    # Convert to list of tuples
+    retailed_items = []
+    for store_id in store_ids:
+        items = nonzero_res[store_id]
+        pairs = list(zip([store_id] * len(items), items))
+        retailed_items.extend(pairs)
+
+    return pd.DataFrame(retailed_items, columns=[store_col, item_col])
+
+
+def visualize_product_availability(
+    retailed_items,
+    store_col="store_nbr",
+    item_col="item_nbr",
+    figsize=(12, 15),
+    title=None,
+):
+    """
+    Hiển thị heatmap cho thấy sản phẩm nào được bán ở cửa hàng nào.
+
+    Parameters:
+        retailed_items: DataFrame từ get_nonzero_items()
+        store_col: Tên cột store
+        item_col: Tên cột item
+        figsize: Kích thước figure
+        title: Tiêu đề custom (nếu None sẽ dùng tiêu đề mặc định)
+    """
+    # Add marker column
+    df = retailed_items.copy()
+    df["available"] = 1
+
+    # Create pivot table
+    pivot = df.pivot_table(
+        index=item_col, columns=store_col, values="available", aggfunc=np.sum
+    )
+
+    # Plot heatmap
+    plt.figure(figsize=figsize)
+    sns.heatmap(pivot, cmap="RdYlGn", cbar_kws={"label": "Available"})
+    plt.yticks(fontsize=8)
+    plt.xticks(fontsize=8)
+
+    if title is None:
+        title = "Product Availability Matrix\n(Red = Available, White = Not Available)"
+    plt.title(title, fontsize=14, fontweight="bold", pad=20)
+    plt.xlabel(f'{store_col.replace("_", " ").title()}', fontsize=12)
+    plt.ylabel(f'{item_col.replace("_", " ").title()}', fontsize=12)
+    plt.tight_layout()
+    plt.show()
+
+    # Print summary statistics
+    total_stores = pivot.shape[1]
+    total_items = pivot.shape[0]
+    coverage_pct = (pivot.notna().sum().sum() / (total_stores * total_items)) * 100
+
+    print(f"\n{'='*60}")
+    print(f"SUMMARY: Product Distribution Analysis")
+    print(f"{'='*60}")
+    print(f"Total Stores: {total_stores}")
+    print(f"Total Items: {total_items}")
+    print(f"Total Possible Combinations: {total_stores * total_items:,}")
+    print(f"Actual Products Sold: {len(retailed_items):,}")
+    print(f"Coverage: {coverage_pct:.1f}%")
+    print(f"{'='*60}\n")
+
+
+def show_top_products(retailed_items, item_col="item_nbr", top_n=10):
+    """
+    Hiển thị top N sản phẩm được bán ở nhiều cửa hàng nhất.
+
+    Parameters:
+        retailed_items: DataFrame từ get_nonzero_items()
+        item_col: Tên cột item
+        top_n: Số lượng sản phẩm top muốn hiển thị
+
+    Returns:
+        DataFrame chứa top products
+    """
+    df = retailed_items.copy()
+    df["count"] = 1
+
+    # Count stores per item
+    top_products = (
+        df.groupby(item_col)["count"]
+        .sum()
+        .reset_index()
+        .rename(columns={"count": "num_stores"})
+        .sort_values("num_stores", ascending=False)
+        .head(top_n)
+    )
+
+    print(f"\n{'='*60}")
+    print(f"TOP {top_n} MOST WIDELY SOLD PRODUCTS")
+    print(f"{'='*60}")
+    print(top_products.to_string(index=False))
+    print(f"{'='*60}\n")
+
+    return top_products
+
+
+def analyze_product_distribution(
+    df,
+    store_col=None,
+    item_col=None,
+    value_col=None,
+    show_heatmap=True,
+    show_top=True,
+    top_n=10,
+    figsize=(12, 15),
+):
+    """
+    Phân tích toàn diện về phân bố sản phẩm giữa các cửa hàng.
+
+    Parameters:
+        df: DataFrame gốc chứa dữ liệu bán hàng
+        store_col: Tên cột store (auto-detect nếu None)
+        item_col: Tên cột item (auto-detect nếu None)
+        value_col: Tên cột giá trị (auto-detect nếu None)
+        show_heatmap: Có hiển thị heatmap không
+        show_top: Có hiển thị top products không
+        top_n: Số lượng top products
+        figsize: Kích thước heatmap
+
+    Returns:
+        retailed_items: DataFrame các cặp (Store, Item) có bán hàng
+    """
+    print("\n🔍 ANALYZING PRODUCT DISTRIBUTION...\n")
+
+    # Step 1: Get non-zero items
+    retailed_items = get_nonzero_items(
+        df,
+        store_col=store_col or "store_nbr",
+        item_col=item_col or "item_nbr",
+        value_col=value_col or "units",
+    )
+
+    # Detect actual column names used
+    actual_store_col = retailed_items.columns[0]
+    actual_item_col = retailed_items.columns[1]
+
+    print(f"✅ Found {len(retailed_items)} valid (Store, Item) pairs with sales > 0\n")
+
+    # Step 2: Show top products
+    if show_top:
+        show_top_products(retailed_items, item_col=actual_item_col, top_n=top_n)
+
+    # Step 3: Visualize heatmap
+    if show_heatmap:
+        visualize_product_availability(
+            retailed_items,
+            store_col=actual_store_col,
+            item_col=actual_item_col,
+            figsize=figsize,
+        )
+
+    return retailed_items
+
+
+def fill_missing_values(df, value_col=None):
+    """
+    Fill NaN values in the target column with the mean of non-NaN values.
+
+    Parameters:
+        df: DataFrame containing the data
+        value_col: (Optional) Name of the target column. If None, auto-detects 'sales' or 'units'
+
+    Returns:
+        DataFrame with filled values
+    """
     df_filled = df.copy()
-    df_filled["sales"] = df_filled["sales"].fillna(df_filled["sales"].mean())
+
+    # Auto-detect column if not specified
+    if value_col is None:
+        value_col = get_value_column(df_filled)
+
+    df_filled[value_col] = df_filled[value_col].fillna(df_filled[value_col].mean())
     return df_filled
 
 
-def correct_outliers(df, factor=3):
-    """Identify and correct outliers in the 'sales' column by reducing them to the mean"""
+def fill_missing_values_grouped(df, value_col=None):
+    df_filled = df.copy()
+
+    if value_col is None:
+        value_col = get_value_column(df_filled)
+
+    store_col = "store_id" if "store_id" in df_filled.columns else "store_nbr"
+    item_col = "item_id" if "item_id" in df_filled.columns else "item_nbr"
+
+    # Fill NaN với mean của từng nhóm (store-item)
+    df_filled[value_col] = df_filled.groupby([store_col, item_col])[
+        value_col
+    ].transform(lambda x: x.fillna(x.mean()))
+
+    return df_filled
+
+
+def correct_outliers(df, factor=3, value_col=None):
+    """
+    Identify and correct outliers in the target column by replacing them with the mean.
+    Uses z-score method for outlier detection.
+
+    Parameters:
+        df: DataFrame containing the data
+        factor: Z-score threshold (default=3, meaning 3 standard deviations)
+        value_col: (Optional) Name of the target column. If None, auto-detects 'sales' or 'units'
+
+    Returns:
+        DataFrame with corrected outliers
+    """
     df_corrected = df.copy()
 
-    # Identify outliers using z-score
-    z_scores = (df_corrected["sales"] - df_corrected["sales"].mean()) / df_corrected[
-        "sales"
-    ].std()
-    outlier_indices = np.abs(z_scores) > factor  # Adjust the threshold as needed
-    # Correct outliers by reducing them to the mean
-    df_corrected.loc[outlier_indices, "sales"] = df_corrected["sales"].mean()
+    # Auto-detect column if not specified
+    if value_col is None:
+        value_col = get_value_column(df_corrected)
+
+    # Calculate z-scores
+    mean_val = df_corrected[value_col].mean()
+    std_val = df_corrected[value_col].std()
+    z_scores = (df_corrected[value_col] - mean_val) / std_val
+
+    # Identify outliers
+    outlier_indices = np.abs(z_scores) > factor
+
+    # Correct outliers by replacing with mean
+    df_corrected.loc[outlier_indices, value_col] = mean_val
 
     return df_corrected
 
 
 def get_sample_stores(df: pd.DataFrame, store_id: int = 1) -> pd.DataFrame:
-    """Get the sample stores with store_id"""
-    grouped = df.groupby("store_id")
-    sample_store = grouped.get_group((store_id))
+    """
+    Get the sample data for a specific store.
+    Supports both 'store_id' and 'store_nbr' column names.
+
+    Parameters:
+        df: DataFrame containing store data
+        store_id: ID of the store to filter
+
+    Returns:
+        Filtered DataFrame for the specified store
+    """
+    # Auto-detect store column name
+    store_col = None
+    for col_name in ["store_id", "store_nbr"]:
+        if col_name in df.columns:
+            store_col = col_name
+            break
+
+    if store_col is None:
+        raise ValueError("DataFrame must contain 'store_id' or 'store_nbr' column")
+
+    grouped = df.groupby(store_col)
+    sample_store = grouped.get_group(store_id)
     return sample_store
 
 
@@ -41,34 +327,39 @@ def save_data(df, file_path, file_format="feather"):
     Save a DataFrame to a specified file format.
 
     Parameters:
-    - df (pd.DataFrame): The DataFrame to be saved.
-    - file_path (str): The path where the file will be saved.
-    - file_format (str): The format in which to save the file. Supported formats: 'feather', 'csv'.
-                        Default is 'feather'.
-    Example:
-    ```python
-    # Assuming df is the DataFrame you want to save
-    save_data(df, 'output_data.feather', file_format='feather')
-    ```
+        df (pd.DataFrame): The DataFrame to be saved.
+        file_path (str): The path where the file will be saved.
+        file_format (str): The format in which to save the file.
+                          Supported formats: 'feather', 'csv'. Default is 'feather'.
 
-    Note:
-    - Make sure to have the required libraries (pandas and feather-format) installed.
+    Example:
+        ```
+        save_data(df, 'output_data.feather', file_format='feather')
+        ```
     """
     if file_format.lower() == "feather":
-        # Save to Feather format
         df.to_feather(file_path)
         print(f"DataFrame saved to {file_path} in Feather format.")
     elif file_format.lower() == "csv":
-        # Save to CSV format
         df.to_csv(file_path, index=False)
         print(f"DataFrame saved to {file_path} in CSV format.")
     else:
         print(
-            f"Error: Unsupported file format '{file_format}'. Supported formats: 'feather', 'csv'."
+            f"Error: Unsupported file format '{file_format}'. "
+            f"Supported formats: 'feather', 'csv'."
         )
 
 
 def flatten_prophet_predictions(predictions_dict):
+    """
+    Flatten Prophet predictions dictionary into a single DataFrame.
+
+    Parameters:
+        predictions_dict: Dictionary with store-item keys and prediction DataFrames as values
+
+    Returns:
+        Concatenated DataFrame with 'store_item' column added
+    """
     all_dfs = []
 
     for store_item, df in predictions_dict.items():
@@ -82,35 +373,33 @@ def flatten_prophet_predictions(predictions_dict):
 def load_model(file_path):
     """
     Load a machine learning model from a file.
+    Supports both scikit-learn (pickle) and LightGBM models.
 
     Parameters:
-    - file_path: The file path from where the model will be loaded.
+        file_path: The file path from where the model will be loaded.
 
     Returns:
-    - The loaded model.
+        The loaded model.
     """
     try:
         with open(file_path, "rb") as file:
             model = pickle.load(file)
             print(f"Sklearn model loaded from {file_path}")
-
     except (pickle.UnpicklingError, FileNotFoundError):
-        # If loading as scikit-learn model fails or the file is not found,
-        # assume it is a LightGBM model (scikit-learn API)
+        # If loading as scikit-learn model fails, assume it is a LightGBM model
         model = lgbm.Booster(model_file=file_path)
         print(f"LightGBM (scikit-learn API) model loaded from {file_path}")
 
     return model
 
 
-# Function to calculate WAPE (Weighted Absolute Percentage Error)
 def weighted_absolute_percentage_error(y_true, y_pred):
     """
-    Calculate Weighted Absolute Percentage Error
+    Calculate Weighted Absolute Percentage Error (WAPE).
 
     Args:
-        y_true: Actual values
-        y_pred: Predicted values
+        y_true: Actual values (array-like)
+        y_pred: Predicted values (array-like)
 
     Returns:
         WAPE value (percentage)
