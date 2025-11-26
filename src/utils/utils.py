@@ -295,6 +295,50 @@ def correct_outliers(df, factor=3, value_col=None):
     return df_corrected
 
 
+def correct_weather_outliers(df, cols, method="iqr", factor=3):
+    """
+    Xử lý outlier cho các cột thời tiết.
+
+    Parameters:
+        df: DataFrame weather
+        cols: Danh sách các cột cần check (ví dụ: ['tmax', 'tmin', 'stnpressure'])
+        method: 'iqr' hoặc 'zscore'
+        factor: Ngưỡng (1.5 hoặc 3 cho IQR, 3 cho Z-score)
+    """
+    df_clean = df.copy()
+
+    for col in cols:
+        # Skip if column is not numeric
+        if not pd.api.types.is_numeric_dtype(df_clean[col]):
+            continue
+
+        if method == "iqr":
+            Q1 = df_clean[col].quantile(0.25)
+            Q3 = df_clean[col].quantile(0.75)
+            IQR = Q3 - Q1
+            lower = Q1 - factor * IQR
+            upper = Q3 + factor * IQR
+        else:  # z-score
+            mean = df_clean[col].mean()
+            std = df_clean[col].std()
+            lower = mean - factor * std
+            upper = mean + factor * std
+
+        # Identify outliers
+        mask = (df_clean[col] < lower) | (df_clean[col] > upper)
+
+        if mask.sum() > 0:
+            print(
+                f"Column '{col}': Found {mask.sum()} outliers. Range allowed: [{lower:.2f}, {upper:.2f}]"
+            )
+
+            # Fill NaN and interpolate , best for time series data
+            df_clean.loc[mask, col] = np.nan
+            df_clean[col] = df_clean[col].interpolate(method="linear")
+
+    return df_clean
+
+
 def get_sample_stores(df: pd.DataFrame, store_id: int = 1) -> pd.DataFrame:
     """
     Get the sample data for a specific store.

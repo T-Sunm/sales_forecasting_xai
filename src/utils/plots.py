@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import math
 
 
 def get_col_name(df, possible_names):
@@ -223,4 +224,62 @@ def plot_sales_predictions(
     fig.suptitle(
         f"Sales Forecast vs Actual - Store {store_name}", fontsize=16, fontweight="bold"
     )
+    plt.show()
+
+
+def plot_weather_boxplots(df, cols, ncols=3, figsize_factor=(5, 4)):
+    """
+    Vẽ hàng loạt Box Plots cho các cột thời tiết để kiểm tra Outliers.
+
+    Parameters:
+        df (DataFrame): DataFrame chứa dữ liệu thời tiết
+        cols (list): Danh sách tên các cột cần vẽ (ví dụ: ['tmax', 'tmin', ...])
+        ncols (int): Số lượng biểu đồ trên một hàng (mặc định 3)
+        figsize_factor (tuple): Kích thước (rộng, cao) cho mỗi subplot
+    """
+    # Lọc ra chỉ các cột numeric có trong DataFrame
+    valid_cols = [
+        c for c in cols if c in df.columns and pd.api.types.is_numeric_dtype(df[c])
+    ]
+
+    if not valid_cols:
+        print("No valid numeric columns found to plot.")
+        return
+
+    n_plots = len(valid_cols)
+    nrows = math.ceil(n_plots / ncols)
+
+    # Tự động tính kích thước tổng thể
+    fig, axes = plt.subplots(
+        nrows, ncols, figsize=(ncols * figsize_factor[0], nrows * figsize_factor[1])
+    )
+    axes = axes.flatten()  # Làm phẳng mảng axes để dễ loop
+
+    for i, col in enumerate(valid_cols):
+        ax = axes[i]
+
+        # Vẽ Box Plot
+        sns.boxplot(
+            x=df[col],
+            ax=ax,
+            color="skyblue",
+            flierprops={"marker": "o", "markerfacecolor": "red", "markersize": 3},
+        )
+
+        # Trang trí
+        ax.set_title(f"{col}", fontsize=10, fontweight="bold")
+        ax.set_xlabel("")
+        ax.grid(True, linestyle="--", alpha=0.5)
+
+    # Ẩn các ô thừa
+    for i in range(n_plots, len(axes)):
+        axes[i].axis("off")
+
+    plt.suptitle(
+        "Weather Variables - Outlier Detection (Box Plots)",
+        fontsize=14,
+        fontweight="bold",
+        y=1.02,
+    )
+    plt.tight_layout()
     plt.show()
