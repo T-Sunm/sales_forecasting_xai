@@ -4,6 +4,113 @@ import pandas as pd
 import seaborn as sns
 import math
 
+from statsmodels.tsa.stattools import adfuller
+
+
+def plot_custom_correlation(
+    df,
+    feature_cols,
+    target_cols=["units", "store_nbr", "item_nbr", "station_nbr"],
+    figsize=(16, 12),
+    title_suffix="",
+):
+    """
+    Vẽ Heatmap tương quan cho một nhóm Feature bất kỳ với Target.
+
+    Parameters:
+        df: DataFrame tổng
+        feature_cols: List các cột tính năng muốn kiểm tra (VD: ['RA', 'SN'] hoặc ['tmax', 'tmin'])
+        target_cols: Các cột mục tiêu/ID luôn muốn giữ lại để so sánh
+    """
+    # 1. Gộp danh sách cột cần vẽ
+    cols_of_interest = target_cols + feature_cols
+
+    # Lọc những cột thực sự tồn tại
+    existing_cols = [c for c in cols_of_interest if c in df.columns]
+
+    # Lấy dữ liệu số
+    df_corr = df[existing_cols].select_dtypes(include=[np.number])
+
+    if df_corr.empty:
+        print("No suitable numeric data found for correlation.")
+        return
+
+    # 2. Tính Correlation
+    corr_matrix = df_corr.corr()
+
+    # 3. Vẽ Heatmap
+    plt.figure(figsize=figsize)
+    mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
+
+    sns.heatmap(
+        corr_matrix,
+        mask=mask,
+        annot=True,
+        fmt=".2f",
+        cmap="coolwarm",
+        center=0,
+        linewidths=0.5,
+        cbar_kws={"shrink": 0.8},
+    )
+
+    plt.title(
+        f"Correlation Matrix: {title_suffix} vs. Sales", fontsize=16, fontweight="bold"
+    )
+    plt.xticks(rotation=45, ha="right")
+    plt.yticks(rotation=0)
+    plt.tight_layout()
+    plt.show()
+
+    # 4. In ra Top tương quan với 'units'
+    if "units" in corr_matrix.columns:
+        print(f"\n=== Top Correlation with Sales ({title_suffix}) ===")
+        # Chỉ in ra các biến Feature, bỏ qua các biến ID
+        relevant_features = [c for c in feature_cols if c in corr_matrix.columns]
+        print(corr_matrix["units"][relevant_features].sort_values(ascending=False))
+
+
+def plot_top_items_by_units(df, top_n=20, figsize=(14, 7)):
+    """
+    Vẽ biểu đồ Top N sản phẩm có tổng lượng bán (units) cao nhất.
+    """
+    # Tính tổng units cho mỗi item_nbr
+    item_sales = (
+        df.groupby("item_nbr")["logunits"]
+        .sum()
+        .sort_values(ascending=False)
+        .head(top_n)
+        .reset_index()
+    )
+
+    # Chuyển item_nbr sang string để trục X hiển thị đúng dạng category
+    item_sales["item_nbr"] = item_sales["item_nbr"].astype(str)
+
+    plt.figure(figsize=figsize)
+    sns.barplot(
+        data=item_sales,
+        x="item_nbr",
+        y="logunits",
+        palette="viridis",
+        order=item_sales["item_nbr"],
+    )
+
+    plt.title(
+        f"Top {top_n} Items by Total Log Units Sold", fontsize=16, fontweight="bold"
+    )
+    plt.xlabel("Item Number", fontsize=12)
+    plt.ylabel("Total Log Units Sold", fontsize=12)
+    plt.xticks(rotation=45)
+    plt.grid(axis="y", linestyle="--", alpha=0.5)
+    from matplotlib.ticker import FuncFormatter
+
+    def format_func(value, tick_number):
+        return f"{int(value):,}"  # Thêm dấu phẩy ngăn cách hàng nghìn
+
+    plt.gca().yaxis.set_major_formatter(FuncFormatter(format_func))
+
+    plt.tight_layout()
+    plt.show()
+
 
 def get_col_name(df, possible_names):
     """Helper to find the first existing column name from a list."""
@@ -225,6 +332,227 @@ def plot_sales_predictions(
         f"Sales Forecast vs Actual - Store {store_name}", fontsize=16, fontweight="bold"
     )
     plt.show()
+
+
+def plot_units_for_item(df, item_nbr, store_nbr=None, figsize=(12, 6), show_total=True):
+    """
+    Vẽ tổng units bán được theo thời gian cho một item nhất định (có thể chỉ định thêm store).
+
+    Parameters:
+      df: DataFrame bán hàng
+      item_nbr: Giá trị/tập giá trị item (int hoặc list)
+      store_nbr: Giá trị/tập giá trị store (int hoặc list) hoặc None để lấy tất cả
+      figsize: Kích thước hình
+      show_total: Nếu True, in tổng units dưới chart
+    """
+    # Nếu truyền vào một số, chuyển thành list cho tổng quát
+    if not isinstance(item_nbr, (list, tuple, np.ndarray)):
+        item_nbr = [item_nbr]
+
+    # Filter item
+    df_item = df[df["item_nbr"].isin(item_nbr)].copy()
+
+    # Optional: Filter tiếp theo store nếu có
+    if store_nbr is not None:
+        if not isinstance(store_nbr, (list, tuple, np.ndarray)):
+            store_nbr = [store_nbr]
+        df_item = df_item[df_item["store_nbr"].isin(store_nbr)]
+
+    if df_item.empty:
+        print("Không có dữ liệu cho item_nbr và store_nbr chỉ định!")
+        return
+
+    # Nếu nhiều dòng/date, tổng units theo ngày
+    df_daily = df_item.groupby("date")["units"].sum().reset_index()
+
+    plt.figure(figsize=figsize)
+    plt.plot(
+        df_daily["date"],
+        df_daily["units"],
+        marker="o",
+        color="blue",
+        label="Units Sold",
+    )
+    plt.title(
+        f"Units Sold Over Time for Item(s) {item_nbr}"
+        + (f" (Store(s) {store_nbr})" if store_nbr else ""),
+        fontsize=14,
+    )
+    plt.xlabel("Date")
+    plt.ylabel("Units Sold")
+    plt.grid(True, linestyle="--", alpha=0.5)
+    plt.tight_layout()
+    plt.legend()
+    plt.show()
+
+    if show_total:
+        print(f"Tổng units bán ra cho item(s) {item_nbr}: {df_item['units'].sum():,}")
+
+
+def plot_units_by_store(df, figsize=(14, 7)):
+    """
+    Vẽ biểu đồ tổng units bán được theo từng cửa hàng.
+    """
+    # Tính tổng units cho mỗi store
+    store_sales = (
+        df.groupby("store_nbr")["units"]
+        .sum()
+        .sort_values(ascending=False)
+        .reset_index()
+    )
+
+    # Chuyển store_nbr sang string
+    store_sales["store_nbr"] = store_sales["store_nbr"].astype(str)
+
+    plt.figure(figsize=figsize)
+    sns.barplot(
+        data=store_sales,
+        x="store_nbr",
+        y="units",
+        palette="coolwarm",
+        order=store_sales["store_nbr"],
+    )
+
+    plt.title("Total Units Sold by Store", fontsize=16, fontweight="bold")
+    plt.xlabel("Store Number", fontsize=12)
+    plt.ylabel("Total Units Sold", fontsize=12)
+    plt.xticks(rotation=45, ha="right")
+    plt.grid(axis="y", linestyle="--", alpha=0.5)
+
+    # Format trục Y với dấu phẩy
+    from matplotlib.ticker import FuncFormatter
+
+    def format_func(value, tick_number):
+        return f"{int(value):,}"
+
+    plt.gca().yaxis.set_major_formatter(FuncFormatter(format_func))
+
+    plt.tight_layout()
+    plt.show()
+
+    # In top 5 và bottom 5 stores
+    print("=== Top 5 Stores by Sales ===")
+    print(store_sales.head(5))
+    print("\n=== Bottom 5 Stores by Sales ===")
+    print(store_sales.tail(5))
+
+
+def plot_weather_trend(df, weather_col="tmax", figsize=(14, 6)):
+    """
+    Vẽ xu hướng của một biến thời tiết theo thời gian (có thể nhiều trạm).
+
+    Parameters:
+        df: DataFrame thời tiết
+        weather_col: Tên cột cần vẽ (tmax, tavg, preciptotal...)
+        figsize: Kích thước hình
+    """
+    if weather_col not in df.columns:
+        print(f"Column '{weather_col}' not found in DataFrame.")
+        return
+
+    plt.figure(figsize=figsize)
+
+    # Nếu chỉ có 1 trạm hoặc đã aggregate
+    df_sorted = df.sort_values("date")
+    plt.plot(
+        df_sorted["date"], df_sorted[weather_col], color="steelblue", linewidth=1.5
+    )
+
+    plt.title(f"Trend of {weather_col} over the dates", fontsize=14, fontweight="bold")
+    plt.xlabel("dates", fontsize=11)
+    plt.ylabel(weather_col, fontsize=11)
+    plt.grid(True, linestyle="--", alpha=0.3)
+
+    # Chỉ hiện legend nếu có nhiều trạm (tránh rối)
+    if "station_nbr" in df.columns and df["station_nbr"].nunique() <= 10:
+        plt.legend(loc="best", fontsize=9)
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_rolling_mean_stationarity(
+    df, weather_cols, window=7, station_nbr=None, figsize=(14, 5)
+):
+    """
+    Vẽ rolling mean + tự động chạy ADF test để kiểm tra stationarity.
+    """
+    # Filter data
+    df_plot = df[df["station_nbr"] == station_nbr].copy() if station_nbr else df.copy()
+    df_plot = df_plot.sort_values("date")
+
+    # Lọc cột hợp lệ
+    valid_cols = [
+        c
+        for c in weather_cols
+        if c in df_plot.columns and pd.api.types.is_numeric_dtype(df_plot[c])
+    ]
+
+    if not valid_cols:
+        print("No valid columns found.")
+        return
+
+    # Tính rolling
+    for col in valid_cols:
+        df_plot[f"{col}_rm"] = df_plot[col].rolling(window, min_periods=1).mean()
+        df_plot[f"{col}_rs"] = df_plot[col].rolling(window, min_periods=1).std()
+
+    # Plot
+    fig, axes = plt.subplots(
+        len(valid_cols), 1, figsize=(figsize[0], figsize[1] * len(valid_cols))
+    )
+    axes = [axes] if len(valid_cols) == 1 else axes
+
+    for idx, col in enumerate(valid_cols):
+        ax = axes[idx]
+        ax.plot(
+            df_plot["date"],
+            df_plot[col],
+            color="lightblue",
+            linewidth=1,
+            alpha=0.5,
+            label="Raw",
+        )
+        ax.plot(
+            df_plot["date"],
+            df_plot[f"{col}_rm"],
+            color="darkblue",
+            linewidth=2,
+            label=f"Rolling Mean ({window}d)",
+        )
+        ax.fill_between(
+            df_plot["date"],
+            df_plot[f"{col}_rm"] - df_plot[f"{col}_rs"],
+            df_plot[f"{col}_rm"] + df_plot[f"{col}_rs"],
+            color="blue",
+            alpha=0.1,
+            label="±1 Std",
+        )
+
+        ax.set_title(f"{col.upper()}", fontsize=11, fontweight="bold")
+        ax.set_ylabel(col, fontsize=10)
+        ax.legend(loc="best", fontsize=9)
+        ax.grid(True, alpha=0.3)
+        ax.tick_params(axis="x", rotation=45)
+
+    plt.suptitle(
+        f"Stationarity Check: Rolling Mean Test", fontsize=14, fontweight="bold"
+    )
+    plt.tight_layout()
+    plt.show()
+
+    # ADF Test
+    print("\n" + "=" * 70)
+    print("AUGMENTED DICKEY-FULLER (ADF) TEST RESULTS")
+    print("=" * 70)
+
+    for col in valid_cols:
+        series = df_plot[col].dropna()
+        result = adfuller(series)
+        status = "✅ STATIONARY" if result[1] < 0.05 else "❌ NON-STATIONARY"
+
+        print(f"\n{col.upper()}: {status} (p-value = {result[1]:.4f})")
+        print(f"  Test Stat: {result[0]:.4f} | Critical (5%): {result[4]['5%']:.4f}")
 
 
 def plot_weather_boxplots(df, cols, ncols=3, figsize_factor=(5, 4)):

@@ -10,3 +10,5 @@ shap==0.44.1
 streamlit==1.35.0
 joblib==1.4.2
 pyarrow==20.0.0
+statsmodels==0.14.5
+prophet==1.2.1
