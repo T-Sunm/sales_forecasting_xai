@@ -70,3 +70,6 @@ Desktop.ini
 
 # Notebook outputs
 *.nbconvert.ipynb
+data/data_processed/
+
+*.feather
