@@ -13,3 +13,4 @@ pyarrow==20.0.0
 statsmodels==0.14.5
 prophet==1.2.1
 beautifulsoup4==4.14.2
+xgboost==3.1.2
