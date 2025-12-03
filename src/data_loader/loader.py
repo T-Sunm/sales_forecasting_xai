@@ -7,14 +7,14 @@ import streamlit as st
 
 @st.cache_resource
 def load_model():
-    """Load the trained sales forecast model"""
+    """Load the trained sales forecast models dictionary"""
     try:
-        with open("models/sales_forecast_model.pkl", "rb") as file:
-            model = pickle.load(file)
-        return model
+        with open("models/lgbm_models_dict.pkl", "rb") as file:
+            models_dict = pickle.load(file)
+        return models_dict
     except FileNotFoundError:
         st.error(
-            "Model file not found. Please ensure 'models/sales_forecast_model.pkl' exists."
+            "Model file not found. Please ensure 'models/lgbm_models_dict.pkl' exists."
         )
         return None
 
@@ -38,7 +38,11 @@ def load_data():
     """Load preprocessed sales data"""
     try:
         # Load the preprocessed data
-        df = pd.read_csv("data/sales_data_preprocessed.csv")
+        df = pd.read_csv("data/data_processed/weather_key_store_merged.csv")
+
+        # Filter out kaggle test data
+        if "is_kaggle_test" in df.columns:
+            df = df[df["is_kaggle_test"] == False]
 
         # Convert date column to datetime
         if "date" in df.columns:
@@ -47,7 +51,7 @@ def load_data():
         return df
     except FileNotFoundError:
         st.error(
-            "Data file not found. Please ensure 'data/sales_data_preprocessed.csv' exists."
+            "Data file not found. Please ensure 'data/data_processed/weather_key_store_merged.csv' exists."
         )
         # Return empty DataFrame with expected columns as fallback
         return pd.DataFrame(columns=["date", "store", "sales"])
@@ -60,13 +64,13 @@ def load_feature_engineered_data():
         import pyarrow.feather as feather
 
         feature_engineered_data = feather.read_feather(
-            "data/feature_engineered_data_55_features.feather"
+            "data/data_processed/feature_engineered_data_89_features.feather"
         )
         return feature_engineered_data
     except Exception as e:
         st.error(f"Error loading feature engineered data: {str(e)}")
         st.info(
-            "Please ensure the file 'data/feature_engineered_data_55_features.feather' exists."
+            "Please ensure the file 'data/data_processed/feature_engineered_data_89_features.feather' exists."
         )
         return pd.DataFrame()
 
@@ -95,3 +99,22 @@ def preprocess_data(df, feature_stats=None):
                 ]
 
     return processed_df
+
+
+def get_top_data_pair(df):
+    """Find the (store_nbr, item_nbr) pair with the most records"""
+    if df.empty or "store_nbr" not in df.columns or "item_nbr" not in df.columns:
+        return None, None
+        
+    counts = (
+        df.groupby(["store_nbr", "item_nbr"])
+        .size()
+        .reset_index(name="n_rows")
+        .sort_values("n_rows", ascending=False)
+    )
+    
+    if counts.empty:
+        return None, None
+        
+    top_row = counts.iloc[0]
+    return int(top_row["store_nbr"]), int(top_row["item_nbr"])

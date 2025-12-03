@@ -101,6 +101,11 @@ def create_product_selection_sidebar(
 ):
     """Create sidebar for store and product selection"""
 
+    from src.data_loader.loader import get_top_data_pair
+    
+    # Get top pair for default selection
+    top_store, top_item = get_top_data_pair(df)
+    
     with st.sidebar:
         st.header("Product Selection")
 
@@ -109,13 +114,26 @@ def create_product_selection_sidebar(
             store_options = [
                 f"{store_id} - {store_names[store_id]}" for store_id in stores
             ]
-            selected_store_option = st.selectbox("Select Store", options=store_options)
+            # Find index of top store
+            default_store_idx = 0
+            if top_store is not None:
+                for i, s in enumerate(stores):
+                    if s == top_store:
+                        default_store_idx = i
+                        break
+                        
+            selected_store_option = st.selectbox("Select Store", options=store_options, index=default_store_idx)
             store_id = int(selected_store_option.split(" - ")[0])
         else:
-            store_id = st.selectbox("Select Store ID", options=stores)
+            # Find index of top store
+            default_store_idx = 0
+            if top_store is not None and top_store in stores:
+                default_store_idx = stores.index(top_store)
+                
+            store_id = st.selectbox("Select Store ID", options=stores, index=default_store_idx)
 
         # Get items for the selected store
-        store_items = df[df[store_col] == store_id][item_col].unique()
+        store_items = sorted(df[df[store_col] == store_id][item_col].unique())
 
         # Item selection with names if available
         if has_item_names:
@@ -124,10 +142,25 @@ def create_product_selection_sidebar(
                 for item_id in store_items
                 if item_id in item_names
             ]
-            selected_item_option = st.selectbox("Select Product", options=item_options)
+            
+            # Find index of top item if it's in the current store's items
+            default_item_idx = 0
+            if top_item is not None and top_item in store_items:
+                # We need to find the index in the options list
+                for i, opt in enumerate(item_options):
+                    if opt.startswith(f"{top_item} -"):
+                        default_item_idx = i
+                        break
+            
+            selected_item_option = st.selectbox("Select Product", options=item_options, index=default_item_idx)
             item_id = int(selected_item_option.split(" - ")[0])
         else:
-            item_id = st.selectbox("Select Product ID", options=sorted(store_items))
+            # Find index of top item if it's in the current store's items
+            default_item_idx = 0
+            if top_item is not None and top_item in store_items:
+                default_item_idx = store_items.index(top_item)
+                
+            item_id = st.selectbox("Select Product ID", options=store_items, index=default_item_idx)
 
     return store_id, item_id
 
@@ -319,9 +352,22 @@ def generate_prediction(
             # Create DataFrame for prediction
             input_df = pd.DataFrame([input_row])
 
+            # Retrieve the specific model for this store and item
+            if isinstance(model, dict):
+                specific_model = model.get((store_id, item_id))
+                if specific_model is None:
+                    st.error(
+                        f"No trained model found for Store {store_id} and Product {item_id}. "
+                        "Please select a different combination."
+                    )
+                    return
+            else:
+                # Fallback if model is not a dict (backward compatibility)
+                specific_model = model
+
             # Get the features that the model expects
-            if hasattr(model, "feature_name_"):
-                model_features = model.feature_name_
+            if hasattr(specific_model, "feature_name_"):
+                model_features = specific_model.feature_name_
             else:
                 model_features = [
                     col
@@ -334,7 +380,7 @@ def generate_prediction(
             X_pred = input_df[model_features]
 
             # Make prediction
-            base_prediction = model.predict(X_pred)[0]
+            base_prediction = specific_model.predict(X_pred)[0]
 
             # Apply adjustment factors
             adjusted_prediction = base_prediction
@@ -387,7 +433,7 @@ def generate_prediction(
                 has_item_names,
                 store_names,
                 item_names,
-                model,
+                specific_model,
                 model_features,
             )
 

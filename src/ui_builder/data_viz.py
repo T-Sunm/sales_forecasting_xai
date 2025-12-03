@@ -13,20 +13,20 @@ def plot_sales_forecast(
     fig, ax = plt.subplots(figsize=(12, 6))
 
     # Filter for specific store if provided
-    if store_id is not None and "store" in historical_data.columns:
-        plot_data = historical_data[historical_data["store"] == store_id].copy()
+    if store_id is not None and "store_nbr" in historical_data.columns:
+        plot_data = historical_data[historical_data["store_nbr"] == store_id].copy()
     else:
         plot_data = historical_data.copy()
 
     # Group by date if multiple records per date
     if len(plot_data) > len(plot_data["date"].unique()):
-        plot_data = plot_data.groupby("date")["sales"].sum().reset_index()
+        plot_data = plot_data.groupby("date")["units"].sum().reset_index()
 
     # Sort by date
     plot_data = plot_data.sort_values("date")
 
     # Plot historical data
-    ax.plot(plot_data["date"], plot_data["sales"], label="Historical Sales")
+    ax.plot(plot_data["date"], plot_data["units"], label="Historical Sales")
 
     # Add prediction point
     ax.scatter(
@@ -35,7 +35,7 @@ def plot_sales_forecast(
 
     # Formatting
     ax.set_xlabel("Date")
-    ax.set_ylabel("Sales")
+    ax.set_ylabel("Units Sold")
     if store_id is not None:
         ax.set_title(f"Sales Forecast for Store {store_id}")
     else:
@@ -55,13 +55,13 @@ def plot_sales_time_series(
     # Plot data based on store selection
     if selected_store_name == "All Stores" and selected_store == "All Stores":
         # Group by date for the trend line
-        sales_by_date = filtered_data.groupby("date")["sales"].sum()
+        sales_by_date = filtered_data.groupby("date")["units"].sum()
         ax.plot(sales_by_date.index, sales_by_date.values, "b-")
 
         # Add moving average
         if len(sales_by_date) > 7:
             sales_by_date_df = sales_by_date.reset_index()
-            sales_by_date_df["MA7"] = sales_by_date_df["sales"].rolling(window=7).mean()
+            sales_by_date_df["MA7"] = sales_by_date_df["units"].rolling(window=7).mean()
             ax.plot(
                 sales_by_date_df["date"],
                 sales_by_date_df["MA7"],
@@ -71,13 +71,13 @@ def plot_sales_time_series(
             ax.legend()
     else:
         # Single store - show daily sales and trend
-        sales_by_date = filtered_data.groupby("date")["sales"].sum()
+        sales_by_date = filtered_data.groupby("date")["units"].sum()
         ax.plot(sales_by_date.index, sales_by_date.values, "b-")
 
         # Add moving average if enough data
         if len(sales_by_date) > 7:
             sales_by_date_df = sales_by_date.reset_index()
-            sales_by_date_df["MA7"] = sales_by_date_df["sales"].rolling(window=7).mean()
+            sales_by_date_df["MA7"] = sales_by_date_df["units"].rolling(window=7).mean()
             ax.plot(
                 sales_by_date_df["date"],
                 sales_by_date_df["MA7"],
@@ -87,14 +87,14 @@ def plot_sales_time_series(
             ax.legend()
 
     ax.set_xlabel("")
-    ax.set_ylabel("Sales ($)")
+    ax.set_ylabel("Units Sold")
 
     if "store_name" in filtered_data.columns and selected_store_name != "All Stores":
-        ax.set_title(f"Daily Sales - {selected_store_name}")
-    elif "store" in filtered_data.columns and selected_store != "All Stores":
-        ax.set_title(f"Daily Sales - Store {selected_store}")
+        ax.set_title(f"Daily Units - {selected_store_name}")
+    elif "store_nbr" in filtered_data.columns and selected_store != "All Stores":
+        ax.set_title(f"Daily Units - Store {selected_store}")
     else:
-        ax.set_title("Daily Sales - All Stores")
+        ax.set_title("Daily Units - All Stores")
 
     fig.autofmt_xdate()
     return fig
@@ -102,6 +102,7 @@ def plot_sales_time_series(
 
 def plot_day_of_week_pattern(filtered_data):
     """Generate bar chart showing sales by day of week"""
+    filtered_data = filtered_data.copy()
     fig, ax = plt.subplots(figsize=(6, 4))
 
     # Add day of week name
@@ -119,7 +120,7 @@ def plot_day_of_week_pattern(filtered_data):
     )
 
     # Group by day of week
-    day_sales = filtered_data.groupby("day_name")["sales"].mean().reindex(day_names)
+    day_sales = filtered_data.groupby("day_name")["units"].mean().reindex(day_names, fill_value=0)
 
     # Calculate average line
     avg_daily = day_sales.mean()
@@ -139,8 +140,8 @@ def plot_day_of_week_pattern(filtered_data):
             bars[i].set_color("orange")
 
     ax.set_xlabel("")
-    ax.set_ylabel("Average Sales ($)")
-    ax.set_title("Sales by Day of Week")
+    ax.set_ylabel("Average Units")
+    ax.set_title("Units by Day of Week")
     plt.xticks(rotation=45)
     ax.legend()
 
@@ -152,7 +153,7 @@ def plot_category_distribution(filtered_data):
     fig, ax = plt.subplots(figsize=(6, 6))
 
     category_sales = (
-        filtered_data.groupby("category")["sales"].sum().sort_values(ascending=False)
+        filtered_data.groupby("category")["units"].sum().sort_values(ascending=False)
     )
 
     top_categories = category_sales.head(5)
@@ -171,7 +172,7 @@ def plot_category_distribution(filtered_data):
         shadow=False,
     )
     plt.axis("equal")
-    plt.title("Sales by Category")
+    plt.title("Units by Category")
 
     return fig
 
@@ -182,7 +183,7 @@ def plot_store_comparison(filtered_data, store_identifier="store"):
 
     # Group by store
     store_sales = (
-        filtered_data.groupby(store_identifier)["sales"]
+        filtered_data.groupby(store_identifier)["units"]
         .sum()
         .sort_values(ascending=False)
     )
@@ -196,8 +197,8 @@ def plot_store_comparison(filtered_data, store_identifier="store"):
     ax.set_yticks(y_pos)
     ax.set_yticklabels(top_stores.index)
     ax.invert_yaxis()  # Labels read top-to-bottom
-    ax.set_xlabel("Sales ($)")
-    ax.set_title("Top 10 Stores by Sales")
+    ax.set_xlabel("Units Sold")
+    ax.set_title("Top 10 Stores by Units")
 
     return fig
 
@@ -207,22 +208,22 @@ def plot_sales_distribution(filtered_data):
     fig, ax = plt.subplots(figsize=(10, 4))
 
     # Create histogram with KDE
-    sns.histplot(filtered_data["sales"], bins=30, kde=True, ax=ax)
-
+    sns.histplot(filtered_data["units"], bins=30, kde=True, ax=ax)
+    
     # Add vertical lines for key statistics
-    median_sales = filtered_data["sales"].median()
-    mean_sales = filtered_data["sales"].mean()
+    median_sales = filtered_data["units"].median()
+    mean_sales = filtered_data["units"].mean()
 
     ax.axvline(
-        x=median_sales, color="r", linestyle="--", label=f"Median: ${median_sales:.2f}"
+        x=median_sales, color="r", linestyle="--", label=f"Median: {median_sales:.0f}"
     )
     ax.axvline(
-        x=mean_sales, color="g", linestyle="--", label=f"Mean: ${mean_sales:.2f}"
+        x=mean_sales, color="g", linestyle="--", label=f"Mean: {mean_sales:.1f}"
     )
-
-    ax.set_xlabel("Sales ($)")
+    
+    ax.set_xlabel("Units Sold")
     ax.set_ylabel("Frequency")
-    ax.set_title("Sales Distribution")
+    ax.set_title("Units Distribution")
     ax.legend()
 
     return fig
