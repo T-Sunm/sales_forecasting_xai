@@ -427,7 +427,8 @@ def add_date_features(df, date_col="date"):
         df["season_name"], prefix="season", drop_first=True
     ).astype(int)
     df = pd.concat([df, season_dummies], axis=1)
-    df = df.drop("season_name", axis=1)
+    # Drop both season_name and the original numeric season column
+    df = df.drop(["season_name", "season"], axis=1)
     print(f"✓ Encoded season into {len(season_dummies.columns)} dummy columns")
 
     # Holidays

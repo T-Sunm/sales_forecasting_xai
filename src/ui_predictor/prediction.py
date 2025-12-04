@@ -6,6 +6,8 @@ import pandas as pd
 import seaborn as sns
 import streamlit as st
 
+from src.ui_predictor.recursive_forecast import recursive_forecast
+
 
 def sales_prediction_view(data, model, feature_stats, feature_engineered_data):
     """Display the sales prediction tool interface"""
@@ -21,8 +23,11 @@ def sales_prediction_view(data, model, feature_stats, feature_engineered_data):
         return
 
     # Determine store and item column names
-    store_col = "store_id" if "store_id" in feature_engineered_data.columns else "store"
-    item_col = "item_id" if "item_id" in feature_engineered_data.columns else "item"
+    if "store_nbr" in feature_engineered_data.columns:
+        store_col = "store_nbr"
+    
+    if "item_nbr" in feature_engineered_data.columns:
+        item_col = "item_nbr"
 
     # Check for store/item name columns
     has_store_names = "store_name" in feature_engineered_data.columns
@@ -167,151 +172,144 @@ def create_product_selection_sidebar(
 
 def collect_prediction_inputs():
     """Collect all prediction inputs from the user"""
+    
+    st.info("💡 **Lưu ý:** Các features phức tạp (lag, rolling stats, EWMA) sẽ được tự động lấy từ dữ liệu lịch sử")
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
 
     with col1:
+        st.subheader("📅 Thông tin ngày")
         # Date selection
         prediction_date = st.date_input(
-            "Prediction Date", datetime.now().date() + timedelta(days=1)
+            "Ngày dự đoán", 
+            datetime.now().date() + timedelta(days=1)
         )
 
         # Holiday checkbox
-        is_holiday = st.checkbox("Holiday", value=False)
-
-        # Special events that might affect sales
-        special_event = st.selectbox(
-            "Special Event",
-            [
-                "None",
-                "Sale/Promotion",
-                "Local Event",
-                "Inventory Clearance",
-                "New Product Launch",
-            ],
-        )
-        special_event_factor = 1.0
-        if special_event == "Sale/Promotion":
-            special_event_factor = (
-                st.slider("Promotion Impact (%)", -50, 100, 20) / 100 + 1.0
-            )
-        elif special_event == "Local Event":
-            special_event_factor = (
-                st.slider("Event Impact (%)", -20, 50, 10) / 100 + 1.0
-            )
-        elif special_event == "Inventory Clearance":
-            special_event_factor = (
-                st.slider("Clearance Impact (%)", -70, 30, -10) / 100 + 1.0
-            )
-        elif special_event == "New Product Launch":
-            special_event_factor = (
-                st.slider("Launch Impact (%)", 0, 200, 50) / 100 + 1.0
-            )
+        is_holiday = st.checkbox("Ngày lễ (Holiday)", value=False)
+        
+        # Black Friday checkbox
+        is_blackfriday = st.checkbox("Black Friday", value=False)
 
     with col2:
-        # Temperature slider
-        temperature = st.slider("Temperature (°C)", -10.0, 40.0, 20.0)
+        st.subheader("🌤️ Thông tin thời tiết")
+        
+        # Temperature (tmax in the features)
+        tmax = st.slider("Nhiệt độ tối đa (°F)", 0.0, 110.0, 70.0, 0.5)
+        
+        # Cool (cooling degree days)
+        cool = st.slider("Cool (Cooling Degree Days)", 0.0, 50.0, 10.0, 0.5)
+        
+        # Precipitation
+        preciptotal = st.slider("Lượng mưa (inch)", 0.0, 5.0, 0.0, 0.1)
 
-        # Determine temperature category based on temperature value
-        if temperature < 15:
-            temp_category = "Cool"
-        elif temperature < 25:
-            temp_category = "Warm"
-        else:
-            temp_category = "Hot"
+    # Weather section
+    st.subheader("🌦️ Điều kiện thời tiết chi tiết")
+    
+    # Create expandable section for weather codes
+    with st.expander("Chọn các hiện tượng thời tiết (Weather Codes)", expanded=False):
+        st.caption("Chọn các hiện tượng thời tiết đang xảy ra hoặc dự kiến xảy ra:")
+        
+        # Weather codes organized by category
+        weather_col1, weather_col2, weather_col3 = st.columns(3)
+        
+        weather_codes = {}
+        
+        with weather_col1:
+            st.markdown("**☁️ Mây/Sương mù**")
+            weather_codes['FG'] = st.checkbox("FG - Sương mù (Fog)", value=False)
+            weather_codes['FG+'] = st.checkbox("FG+ - Sương mù dày", value=False)
+            weather_codes['MIFG'] = st.checkbox("MIFG - Sương mù mỏng", value=False)
+            weather_codes['PRFG'] = st.checkbox("PRFG - Sương mù từng phần", value=False)
+            weather_codes['FZFG'] = st.checkbox("FZFG - Sương mù đóng băng", value=False)
+            weather_codes['VCFG'] = st.checkbox("VCFG - Sương mù gần", value=False)
+            weather_codes['BR'] = st.checkbox("BR - Sương mù nhẹ (Mist)", value=False)
+            weather_codes['HZ'] = st.checkbox("HZ - Khói mù (Haze)", value=False)
+            
+        with weather_col2:
+            st.markdown("**🌧️ Mưa/Tuyết**")
+            weather_codes['RA'] = st.checkbox("RA - Mưa (Rain)", value=False)
+            weather_codes['DZ'] = st.checkbox("DZ - Mưa phùn (Drizzle)", value=False)
+            weather_codes['FZRA'] = st.checkbox("FZRA - Mưa đóng băng", value=False)
+            weather_codes['FZDZ'] = st.checkbox("FZDZ - Mưa phùn đóng băng", value=False)
+            weather_codes['SN'] = st.checkbox("SN - Tuyết (Snow)", value=False)
+            weather_codes['BLSN'] = st.checkbox("BLSN - Tuyết thổi", value=False)
+            weather_codes['SG'] = st.checkbox("SG - Hạt tuyết", value=False)
+            weather_codes['PL'] = st.checkbox("PL - Mưa đá nhỏ", value=False)
+            weather_codes['GR'] = st.checkbox("GR - Mưa đá (Hail)", value=False)
+            weather_codes['GS'] = st.checkbox("GS - Mưa đá nhỏ", value=False)
+            
+        with weather_col3:
+            st.markdown("**⛈️ Dông/Bão bụi**")
+            weather_codes['TS'] = st.checkbox("TS - Dông (Thunderstorm)", value=False)
+            weather_codes['TSRA'] = st.checkbox("TSRA - Dông có mưa", value=False)
+            weather_codes['TSSN'] = st.checkbox("TSSN - Dông có tuyết", value=False)
+            weather_codes['VCTS'] = st.checkbox("VCTS - Dông gần", value=False)
+            weather_codes['SQ'] = st.checkbox("SQ - Giông (Squall)", value=False)
+            weather_codes['DU'] = st.checkbox("DU - Bụi (Dust)", value=False)
+            weather_codes['BLDU'] = st.checkbox("BLDU - Bão bụi", value=False)
+            weather_codes['FU'] = st.checkbox("FU - Khói (Smoke)", value=False)
+            weather_codes['BCFG'] = st.checkbox("BCFG - Sương mù từng mảng", value=False)
+            weather_codes['UP'] = st.checkbox("UP - Không xác định", value=False)
 
-        st.write(f"Temperature Category: {temp_category}")
+    # Atmospheric pressure section
+    st.subheader("🌡️ Áp suất khí quyển")
+    pressure_col1, pressure_col2 = st.columns(2)
+    
+    with pressure_col1:
+        stnpressure = st.slider("Áp suất trạm (inHg)", 28.0, 31.0, 29.92, 0.01)
+    
+    with pressure_col2:
+        sealevel = st.slider("Áp suất mực nước biển (inHg)", 28.0, 31.0, 29.92, 0.01)
 
-        # Precipitation/Weather
-        weather_condition = st.selectbox(
-            "Weather Condition", ["Clear", "Cloudy", "Rainy", "Snowy", "Stormy"]
-        )
-
-        # Different product categories are affected differently by weather
-        st.write("Note: Weather impacts vary by product category")
-
-    with col3:
-        # Humidity slider
-        humidity = st.slider("Humidity (%)", 0, 100, 50)
-
-        # Determine humidity level
-        if humidity < 40:
-            humidity_level = "Low"
-        elif humidity < 70:
-            humidity_level = "Medium"
-        else:
-            humidity_level = "High"
-
-        st.write(f"Humidity Level: {humidity_level}")
-
-        # Competition intensity
-        competition_level = st.select_slider(
-            "Competition Level", options=["Low", "Medium", "High"], value="Medium"
-        )
-
-        # Supply chain status
-        supply_chain = st.select_slider(
-            "Supply Chain Status",
-            options=["Constrained", "Normal", "Abundant"],
-            value="Normal",
-        )
+    # Wind section
+    st.subheader("💨 Gió")
+    wind_col1, wind_col2 = st.columns(2)
+    
+    with wind_col1:
+        resultspeed = st.slider("Tốc độ gió (mph)", 0.0, 50.0, 5.0, 0.5)
+    
+    with wind_col2:
+        resultdir = st.slider("Hướng gió (độ)", 0, 360, 180, 10)
 
     # Calculate derived parameters
     month = prediction_date.month
-    if month in [3, 4, 5]:
-        season = "spring"
-    elif month in [6, 7, 8]:
-        season = "summer"
-    elif month in [9, 10, 11]:
-        season = "fall"
-    else:
-        season = "winter"
-
-    quarter = (prediction_date.month - 1) // 3 + 1
+    day = prediction_date.day
+    year = prediction_date.year
     day_of_week = prediction_date.weekday()
     is_weekend = 1 if day_of_week >= 5 else 0
-
-    # Calculate a combined factor based on all special conditions
-    weather_factor = {
-        "Clear": 1.0,
-        "Cloudy": 0.95,
-        "Rainy": 0.9,
-        "Snowy": 0.8,
-        "Stormy": 0.7,
-    }
-
-    competition_factor = {"Low": 1.1, "Medium": 1.0, "High": 0.9}
-
-    supply_factor = {"Constrained": 0.9, "Normal": 1.0, "Abundant": 1.05}
-
-    # Weekend factor (weekends might have different sales patterns)
-    weekend_factor = 1.15 if is_weekend else 1.0
-
-    # Combined adjustment factor
-    adjustment_factor = (
-        special_event_factor
-        * weather_factor.get(weather_condition, 1.0)
-        * competition_factor.get(competition_level, 1.0)
-        * supply_factor.get(supply_chain, 1.0)
-        * weekend_factor
-    )
+    
+    # Season mapping (matching your features: season_Spring, season_Summer, season_Winter)
+    # Note: Fall seems to be the baseline (not in features)
+    if month in [3, 4, 5]:
+        season = "Spring"
+    elif month in [6, 7, 8]:
+        season = "Summer"
+    elif month in [12, 1, 2]:
+        season = "Winter"
+    else:
+        season = "Fall"  # Baseline
 
     return {
         "date": prediction_date,
-        "is_holiday": is_holiday,
-        "temperature": temperature,
-        "temp_category": temp_category,
-        "humidity": humidity,
-        "humidity_level": humidity_level,
-        "season": season,
-        "quarter": quarter,
+        "year": year,
+        "month": month,
+        "day": day,
         "day_of_week": day_of_week,
         "is_weekend": is_weekend,
-        "special_event": special_event,
-        "weather_condition": weather_condition,
-        "competition_level": competition_level,
-        "supply_chain": supply_chain,
-        "adjustment_factor": adjustment_factor,
+        "season": season,
+        "is_holiday": int(is_holiday),
+        "is_blackfriday": int(is_blackfriday),
+        # Weather features
+        "tmax": tmax,
+        "cool": cool,
+        "preciptotal": preciptotal,
+        "stnpressure": stnpressure,
+        "sealevel": sealevel,
+        "resultspeed": resultspeed,
+        "resultdir": resultdir,
+        # Weather codes
+        **{code: int(value) for code, value in weather_codes.items()},
     }
 
 
@@ -346,12 +344,6 @@ def generate_prediction(
                 st.error("No historical data found for this product-store combination.")
                 return
 
-            # Create input based on most recent sample
-            input_row = prepare_prediction_input(recent_samples, prediction_inputs)
-
-            # Create DataFrame for prediction
-            input_df = pd.DataFrame([input_row])
-
             # Retrieve the specific model for this store and item
             if isinstance(model, dict):
                 specific_model = model.get((store_id, item_id))
@@ -365,64 +357,63 @@ def generate_prediction(
                 # Fallback if model is not a dict (backward compatibility)
                 specific_model = model
 
-            # Get the features that the model expects
-            if hasattr(specific_model, "feature_name_"):
-                model_features = specific_model.feature_name_
+            # Get the features that the model expects (needed for both paths)
+            model_features = specific_model.feature_name_
+            
+            # Check if we need recursive forecasting
+            last_historical_date = recent_samples['date'].max()
+            target_date_pd = pd.to_datetime(prediction_inputs["date"])
+            days_gap = (target_date_pd - last_historical_date).days
+            
+            # Use recursive forecasting if gap is more than 1 day
+            if days_gap > 1:
+                st.info(f"📊 Gap between last historical date ({last_historical_date.date()}) and target date ({target_date_pd.date()}): {days_gap} days")
+                
+                # Perform recursive forecasting
+                final_prediction, forecast_history = recursive_forecast(
+                    feature_engineered_data=feature_engineered_data,
+                    model=specific_model,
+                    store_id=store_id,
+                    item_id=item_id,
+                    store_col=store_col,
+                    item_col=item_col,
+                    target_date=target_date_pd,
+                    prediction_inputs=prediction_inputs,
+                    max_forecast_days=5000  # Allow up to ~13 years of recursive forecasting
+                )
+                
+                prediction_units = final_prediction
+                
+                # Show forecast history chart
+                if forecast_history is not None and len(forecast_history) > 1:
+                    with st.expander("📈 View Recursive Forecast History", expanded=False):
+                        st.line_chart(forecast_history.set_index('date')['predicted_units'])
+                        st.caption(f"Showing {len(forecast_history)} daily predictions from {forecast_history['date'].min().date()} to {forecast_history['date'].max().date()}")
+            
             else:
-                model_features = [
-                    col
-                    for col in input_df.columns
-                    if col
-                    not in ["sales", "date", "variation_factor", "adjustment_factor"]
-                ]
+                # Use simple prediction for dates within or close to historical range
+                st.info("📅 Using direct prediction (target date is within historical range)")
+                
+                # Create input based on most recent sample
+                input_row = prepare_prediction_input(recent_samples, prediction_inputs)
 
-            # Select only the features used by the model
-            X_pred = input_df[model_features]
+                # Create DataFrame for prediction
+                input_df = pd.DataFrame([input_row])
 
-            # Make prediction
-            base_prediction = specific_model.predict(X_pred)[0]
+                # Select only the features used by the model
+                X_pred = input_df[model_features]
 
-            # Apply adjustment factors
-            adjusted_prediction = base_prediction
+                # Make prediction
+                prediction = specific_model.predict(X_pred)[0]
+                
+                # Convert from log scale if needed (since your target is 'logunits')
+                # The model predicts logunits, so we need to convert back to units
+                prediction_units = np.exp(prediction)
 
-            # Apply the variation factor if it exists
-            if "variation_factor" in input_row:
-                adjusted_prediction *= input_row["variation_factor"]
-
-            # Apply adjustment factor from user inputs (special events, weather, etc.)
-            if "adjustment_factor" in prediction_inputs:
-                adjusted_prediction *= prediction_inputs["adjustment_factor"]
-
-                # Log the adjustment in a more compact format
-                with st.expander("Adjustment Details"):
-                    adj_col1, adj_col2, adj_col3 = st.columns(3)
-
-                    with adj_col1:
-                        st.write(f"Base prediction: ${base_prediction:.2f}")
-                        st.write(f"Final prediction: ${adjusted_prediction:.2f}")
-                        st.write(
-                            f"Total adjustment: {prediction_inputs['adjustment_factor']:.2f}x"
-                        )
-
-                    with adj_col2:
-                        st.write(f"Event: {prediction_inputs['special_event']}")
-                        st.write(f"Weather: {prediction_inputs['weather_condition']}")
-                        st.write(
-                            f"Competition: {prediction_inputs['competition_level']}"
-                        )
-
-                    with adj_col3:
-                        st.write(f"Supply: {prediction_inputs['supply_chain']}")
-                        st.write(
-                            f"Weekend: {'Yes' if prediction_inputs['is_weekend'] else 'No'}"
-                        )
-                        st.write(
-                            f"Holiday: {'Yes' if prediction_inputs['is_holiday'] else 'No'}"
-                        )
 
             # Display results
             display_prediction_results(
-                adjusted_prediction,
+                prediction_units,
                 store_id,
                 item_id,
                 prediction_inputs,
@@ -434,7 +425,8 @@ def generate_prediction(
                 store_names,
                 item_names,
                 specific_model,
-                model_features,
+                model_features,  # Always pass model_features now
+                forecast_history if days_gap > 1 else None,  # Pass forecast history
             )
 
         except Exception as e:
@@ -452,54 +444,50 @@ def prepare_prediction_input(recent_samples, prediction_inputs):
     """Prepare input row for prediction based on recent sample and user inputs"""
 
     # Create input row based on most recent sample
+    # This preserves all lag features, rolling stats, and EWMA features
     input_row = recent_samples.iloc[0].copy()
 
-    # Update with user inputs
+    # Update date-related features
     input_row["date"] = pd.to_datetime(prediction_inputs["date"])
-    input_row["day"] = prediction_inputs["date"].day
-    input_row["month"] = prediction_inputs["date"].month
-    input_row["year"] = prediction_inputs["date"].year
-    input_row["quarter"] = prediction_inputs["quarter"]
-    input_row["is_holiday"] = int(prediction_inputs["is_holiday"])
+    input_row["day"] = prediction_inputs["day"]
+    input_row["month"] = prediction_inputs["month"]
+    input_row["year"] = prediction_inputs["year"]
+    input_row["day_of_week"] = prediction_inputs["day_of_week"]
+    input_row["is_weekend"] = prediction_inputs["is_weekend"]
+    
+    # Update holiday features
+    input_row["is_holiday"] = prediction_inputs["is_holiday"]
+    if "is_blackfriday" in input_row:
+        input_row["is_blackfriday"] = prediction_inputs["is_blackfriday"]
 
-    # Add day of week information
-    input_row["day_of_week"] = input_row["date"].dayofweek
-    input_row["day_of_month"] = input_row["date"].day
-    input_row["is_weekend"] = 1 if input_row["day_of_week"] >= 5 else 0
+    # Update season features (one-hot encoding)
+    # Features have: season_Spring, season_Summer, season_Winter (Fall is baseline with all 0s)
+    for s in ["Spring", "Summer", "Winter"]:
+        col_name = f"season_{s}"
+        if col_name in input_row:
+            input_row[col_name] = 1 if prediction_inputs["season"] == s else 0
+    
+    # Update weather numerical features
+    weather_features = ["tmax", "cool", "preciptotal", "stnpressure", "sealevel", "resultspeed", "resultdir"]
+    for feature in weather_features:
+        if feature in input_row:
+            input_row[feature] = prediction_inputs[feature]
 
-    # Update actual temperature and humidity values if they exist in the dataframe
-    if "temperature" in input_row:
-        input_row["temperature"] = prediction_inputs["temperature"]
+    # Update weather code features (binary indicators)
+    weather_codes = [
+        'BCFG', 'BLDU', 'BLSN', 'BR', 'DU', 'DZ', 'FG', 'FG+', 'FU', 
+        'FZDZ', 'FZFG', 'FZRA', 'GR', 'GS', 'HZ', 'MIFG', 'PL', 'PRFG', 
+        'RA', 'SG', 'SN', 'SQ', 'TS', 'TSRA', 'TSSN', 'UP', 'VCFG', 'VCTS'
+    ]
+    
+    for code in weather_codes:
+        if code in input_row:
+            # Get value from prediction_inputs, default to 0 if not provided
+            input_row[code] = prediction_inputs.get(code, 0)
 
-    if "humidity" in input_row:
-        input_row["humidity"] = prediction_inputs["humidity"]
-
-    # Update temperature and humidity categories
-    for category in ["Cool", "Warm", "Hot"]:
-        if f"temp_category_{category}" in input_row:
-            input_row[f"temp_category_{category}"] = (
-                1 if category == prediction_inputs["temp_category"] else 0
-            )
-
-    for level in ["Low", "Medium", "High"]:
-        if f"humidity_level_{level}" in input_row:
-            input_row[f"humidity_level_{level}"] = (
-                1 if level == prediction_inputs["humidity_level"] else 0
-            )
-
-    # Update season
-    for s in ["spring", "summer", "fall", "winter", "wet"]:
-        if f"season_{s}" in input_row:
-            input_row[f"season_{s}"] = 1 if s == prediction_inputs["season"] else 0
-
-    # Set a random variation factor to ensure predictions aren't identical
-    # This simulates real-world variability even when inputs are similar
-    # Adjust the scale (0.02 = ±2%) based on how much variation you want
-    variation_factor = 1.0 + np.random.uniform(-0.02, 0.02)
-
-    # Store this factor for logging and debugging purposes
-    input_row["variation_factor"] = variation_factor
-
+    # Note: Lag features, rolling statistics, and EWMA features are preserved from recent_samples
+    # These cannot be manually input and must come from historical data
+    
     return input_row
 
 
@@ -517,6 +505,7 @@ def display_prediction_results(
     item_names,
     model,
     model_features,
+    forecast_history=None,
 ):
     """Display prediction results with visualizations"""
 
@@ -527,7 +516,7 @@ def display_prediction_results(
 
     with res_col1:
         # Display prediction with context
-        st.metric(label="Predicted Sales", value=f"${prediction_value:,.2f}")
+        st.metric(label="Predicted Units", value=f"{prediction_value:,.0f}")
 
         # Display store and item info
         if has_store_names:
@@ -541,9 +530,11 @@ def display_prediction_results(
             st.write(f"**Product ID:** {item_id}")
 
         st.write(f"**Date:** {prediction_inputs['date'].strftime('%B %d, %Y')}")
-        st.write(f"**Season:** {prediction_inputs['season'].capitalize()}")
+        st.write(f"**Season:** {prediction_inputs['season']}")
         if prediction_inputs["is_holiday"]:
             st.write("**Holiday:** Yes")
+        if prediction_inputs.get("is_blackfriday", 0):
+            st.write("**Black Friday:** Yes")
 
     with res_col2:
         # Get historical context
@@ -552,16 +543,19 @@ def display_prediction_results(
             & (historical_data[item_col] == item_id)
         ].sort_values("date")
 
-        if "sales" in historical.columns:
+        # Use 'units' column instead of 'sales'
+        units_col = "units" if "units" in historical.columns else "sales"
+        
+        if units_col in historical.columns:
             # Calculate key statistics
-            last_value = historical["sales"].iloc[-1] if len(historical) > 0 else 0
+            last_value = historical[units_col].iloc[-1] if len(historical) > 0 else 0
             last_date = historical["date"].iloc[-1] if len(historical) > 0 else None
 
-            avg_sales = historical["sales"].mean()
+            avg_units = historical[units_col].mean()
 
-            max_sales = historical["sales"].max()
+            max_units = historical[units_col].max()
             max_date = (
-                historical.loc[historical["sales"].idxmax(), "date"]
+                historical.loc[historical[units_col].idxmax(), "date"]
                 if len(historical) > 0
                 else None
             )
@@ -569,36 +563,40 @@ def display_prediction_results(
             # Display average and trend with dates
             st.metric(
                 label="Historical Average",
-                value=f"${avg_sales:,.2f}",
+                value=f"{avg_units:,.0f} units",
             )
             st.write(
                 f"**Period:** {historical['date'].min().strftime('%b %d, %Y')} to {historical['date'].max().strftime('%b %d, %Y')}"
             )
 
             st.metric(
-                label="Last Recorded Sales",
-                value=f"${last_value:,.2f}",
+                label="Last Recorded Units",
+                value=f"{last_value:,.0f} units",
             )
             if last_date is not None:
                 st.write(f"**Date:** {last_date.strftime('%b %d, %Y')}")
 
-            st.metric(label="Historical Maximum", value=f"${max_sales:,.2f}")
+            st.metric(label="Historical Maximum", value=f"{max_units:,.0f} units")
             if max_date is not None:
                 st.write(f"**Date:** {max_date.strftime('%b %d, %Y')}")
 
     # Historical context
-    display_historical_context(historical, prediction_inputs["date"], prediction_value)
+    display_historical_context(historical, prediction_inputs["date"], prediction_value, forecast_history)
 
     # Feature importance
-    display_feature_importance(model, model_features)
+    if model_features is not None:
+        display_feature_importance(model, model_features)
 
 
-def display_historical_context(historical_data, prediction_date, prediction_value):
+def display_historical_context(historical_data, prediction_date, prediction_value, forecast_history=None):
     """Display historical context visualizations"""
 
     st.subheader("Recent Sales History")
 
-    if "sales" not in historical_data.columns or historical_data.empty:
+    # Use 'units' column instead of 'sales'
+    units_col = "units" if "units" in historical_data.columns else "sales"
+    
+    if units_col not in historical_data.columns or historical_data.empty:
         st.info(
             "No historical sales data available for this product-store combination."
         )
@@ -613,50 +611,74 @@ def display_historical_context(historical_data, prediction_date, prediction_valu
         st.info("No recent sales data available for the last 60 days.")
         return
 
-    # Plot recent sales history - SMALLER SIZE
-    fig, ax = plt.subplots(figsize=(6, 2.5))  # Reduced size
+    # Plot recent sales history - ADJUSTED SIZE
+    fig, ax = plt.subplots(figsize=(10, 3.5))  # Wider to accommodate forecast
 
-    # Plot historical sales
+    # Plot historical units
     ax.plot(
         recent_history["date"],
-        recent_history["sales"],
+        recent_history[units_col],
         "b-",
-        label="Sales",
+        label="Historical Units",
+        linewidth=2,
     )
 
-    # Add the prediction point
+    # Plot forecast history if available
+    if forecast_history is not None and len(forecast_history) > 0:
+        ax.plot(
+            forecast_history["date"],
+            forecast_history["predicted_units"],
+            "orange",
+            linestyle="--",
+            label=f"Recursive Forecast ({len(forecast_history)} days)",
+            linewidth=2,
+            alpha=0.8,
+        )
+
+    # Add the final prediction point
     ax.scatter(
         prediction_date,
         prediction_value,
         color="red",
-        s=60,  # Smaller point
-        label="Prediction",
+        s=100,
+        label="Final Prediction",
+        zorder=5,
+        edgecolors='black',
+        linewidths=1.5,
     )
 
-    # Add moving average
+    # Add moving average for historical data
     if len(recent_history) > 7:
-        recent_history["MA7"] = recent_history["sales"].rolling(window=7).mean()
+        recent_history_copy = recent_history.copy()
+        recent_history_copy["MA7"] = recent_history_copy[units_col].rolling(window=7).mean()
         ax.plot(
-            recent_history["date"],
-            recent_history["MA7"],
+            recent_history_copy["date"],
+            recent_history_copy["MA7"],
             "g--",
             label="7-Day Avg",
+            alpha=0.6,
         )
 
     ax.set_xlabel("")
-    ax.set_ylabel("Sales ($)")
-    ax.set_title("Last 60 Days Sales History")
-    ax.legend(loc="upper left", fontsize="x-small")  # Smaller font
-    fig.autofmt_xdate(rotation=45)  # Adjust date format
+    ax.set_ylabel("Units Sold")
+    title = f"Sales History + Recursive Forecast" if forecast_history is not None else "Last 60 Days Sales History"
+    ax.set_title(title, fontsize=12, fontweight='bold')
+    ax.legend(loc="best", fontsize="small")
+    ax.grid(True, alpha=0.3)
+    fig.autofmt_xdate(rotation=45)
     fig.tight_layout()
 
     st.pyplot(fig)
 
+    # Show forecast statistics if available
+    if forecast_history is not None and len(forecast_history) > 0:
+        st.caption(f"✨ Recursive forecast: {len(forecast_history)} daily predictions from {forecast_history['date'].min().date()} to {forecast_history['date'].max().date()}")
+
     # Weekly pattern visualization
-    display_weekly_pattern(recent_history, prediction_date)
+    display_weekly_pattern(recent_history, prediction_date, units_col)
 
 
-def display_weekly_pattern(recent_history, prediction_date):
+def display_weekly_pattern(recent_history, prediction_date, units_col="units"):
     """Display weekly sales pattern visualization"""
 
     if len(recent_history) >= 7:
@@ -675,11 +697,11 @@ def display_weekly_pattern(recent_history, prediction_date):
         ]
 
         # Group by day of week
-        day_sales = recent_history.groupby("day_of_week")["sales"].mean()
-        day_sales_df = pd.DataFrame(
+        day_units = recent_history.groupby("day_of_week")[units_col].mean()
+        day_units_df = pd.DataFrame(
             {
-                "day_name": [day_names[i] for i in range(7) if i in day_sales.index],
-                "sales": [day_sales[i] for i in range(7) if i in day_sales.index],
+                "day_name": [day_names[i] for i in range(7) if i in day_units.index],
+                "units": [day_units[i] for i in range(7) if i in day_units.index],
             }
         )
 
@@ -687,17 +709,17 @@ def display_weekly_pattern(recent_history, prediction_date):
         fig, ax = plt.subplots(figsize=(6, 2.5))  # Reduced size
 
         # Plot day of week pattern
-        sns.barplot(x="day_name", y="sales", data=day_sales_df, ax=ax)
+        sns.barplot(x="day_name", y="units", data=day_units_df, ax=ax)
 
         # Highlight the day of the prediction
         prediction_day = prediction_date.weekday()
         for i, patch in enumerate(ax.patches):
-            if day_sales_df.iloc[i]["day_name"] == day_names[prediction_day]:
+            if day_units_df.iloc[i]["day_name"] == day_names[prediction_day]:
                 patch.set_facecolor("red")
 
         ax.set_xlabel("")
-        ax.set_ylabel("Avg Sales ($)")
-        ax.set_title("Sales by Day of Week")
+        ax.set_ylabel("Avg Units")
+        ax.set_title("Units Sold by Day of Week")
         plt.xticks(rotation=45, fontsize=8)  # Smaller font
         fig.tight_layout()
 

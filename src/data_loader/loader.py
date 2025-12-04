@@ -64,7 +64,7 @@ def load_feature_engineered_data():
         import pyarrow.feather as feather
 
         feature_engineered_data = feather.read_feather(
-            "data/data_processed/feature_engineered_data_89_features.feather"
+            "data/data_processed/feature_engineered_data_88_features.feather"
         )
         return feature_engineered_data
     except Exception as e:
