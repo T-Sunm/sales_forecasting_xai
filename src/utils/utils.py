@@ -107,7 +107,7 @@ def visualize_product_availability(
 
     # Plot heatmap
     plt.figure(figsize=figsize)
-    sns.heatmap(pivot, cmap="RdYlGn", cbar_kws={"label": "Available"})
+    sns.heatmap(pivot, cmap="YlOrRd", cbar_kws={"label": "Available"})
     plt.yticks(fontsize=8)
     plt.xticks(fontsize=8)
 
