@@ -6,7 +6,7 @@ import pandas as pd
 import seaborn as sns
 import streamlit as st
 
-from src.ui_predictor.recursive_forecast import recursive_forecast
+from src.core.model import ModelManager, PredictionInput
 
 
 def sales_prediction_view(data, model, feature_stats, feature_engineered_data):
@@ -290,27 +290,28 @@ def collect_prediction_inputs():
     else:
         season = "Fall"  # Baseline
 
-    return {
-        "date": prediction_date,
-        "year": year,
-        "month": month,
-        "day": day,
-        "day_of_week": day_of_week,
-        "is_weekend": is_weekend,
-        "season": season,
-        "is_holiday": int(is_holiday),
-        "is_blackfriday": int(is_blackfriday),
+    # Return Pydantic model instead of dict
+    return PredictionInput(
+        date=prediction_date,
+        year=year,
+        month=month,
+        day=day,
+        day_of_week=day_of_week,
+        is_weekend=is_weekend,
+        season=season,
+        is_holiday=int(is_holiday),
+        is_blackfriday=int(is_blackfriday),
         # Weather features
-        "tmax": tmax,
-        "cool": cool,
-        "preciptotal": preciptotal,
-        "stnpressure": stnpressure,
-        "sealevel": sealevel,
-        "resultspeed": resultspeed,
-        "resultdir": resultdir,
+        tmax=tmax,
+        cool=cool,
+        preciptotal=preciptotal,
+        stnpressure=stnpressure,
+        sealevel=sealevel,
+        resultspeed=resultspeed,
+        resultdir=resultdir,
         # Weather codes
         **{code: int(value) for code, value in weather_codes.items()},
-    }
+    )
 
 
 def generate_prediction(
@@ -326,94 +327,37 @@ def generate_prediction(
     store_names,
     item_names,
 ):
-    """Generate sales prediction and display results"""
+    """Generate sales prediction and display results using ModelManager"""
 
     with st.spinner("Generating prediction..."):
         try:
-            # Find recent samples for the same store-item combination
-            recent_samples = (
-                feature_engineered_data[
-                    (feature_engineered_data[store_col] == store_id)
-                    & (feature_engineered_data[item_col] == item_id)
-                ]
-                .sort_values("date", ascending=False)
-                .head(5)  # Get more samples for better prediction context
+            # Initialize ModelManager
+            model_manager = ModelManager()
+            model_manager.models_dict = model  # Use already-loaded models from app.py
+            
+            # Use Core layer to generate prediction
+            result = model_manager.predict(
+                store_id=store_id,
+                item_id=item_id,
+                prediction_input=prediction_inputs,  # Already a PredictionInput (Pydantic)
+                feature_engineered_data=feature_engineered_data,
+                store_col=store_col,
+                item_col=item_col,
+                use_recursive=True
             )
-
-            if recent_samples.empty:
-                st.error("No historical data found for this product-store combination.")
+            
+            # Check for errors
+            if result.error:
+                st.error(result.error)
                 return
-
-            # Retrieve the specific model for this store and item
-            if isinstance(model, dict):
-                specific_model = model.get((store_id, item_id))
-                if specific_model is None:
-                    st.error(
-                        f"No trained model found for Store {store_id} and Product {item_id}. "
-                        "Please select a different combination."
-                    )
-                    return
-            else:
-                # Fallback if model is not a dict (backward compatibility)
-                specific_model = model
-
-            # Get the features that the model expects (needed for both paths)
-            model_features = specific_model.feature_name_
             
-            # Check if we need recursive forecasting
-            last_historical_date = recent_samples['date'].max()
-            target_date_pd = pd.to_datetime(prediction_inputs["date"])
-            days_gap = (target_date_pd - last_historical_date).days
+            # Get model for feature importance display
+            specific_model = model_manager.get_model(store_id, item_id)
+            model_features = specific_model.feature_name_ if specific_model else None
             
-            # Use recursive forecasting if gap is more than 1 day
-            if days_gap > 1:
-                st.info(f"📊 Gap between last historical date ({last_historical_date.date()}) and target date ({target_date_pd.date()}): {days_gap} days")
-                
-                # Perform recursive forecasting
-                final_prediction, forecast_history = recursive_forecast(
-                    feature_engineered_data=feature_engineered_data,
-                    model=specific_model,
-                    store_id=store_id,
-                    item_id=item_id,
-                    store_col=store_col,
-                    item_col=item_col,
-                    target_date=target_date_pd,
-                    prediction_inputs=prediction_inputs,
-                    max_forecast_days=5000  # Allow up to ~13 years of recursive forecasting
-                )
-                
-                prediction_units = final_prediction
-                
-                # Show forecast history chart
-                if forecast_history is not None and len(forecast_history) > 1:
-                    with st.expander("📈 View Recursive Forecast History", expanded=False):
-                        st.line_chart(forecast_history.set_index('date')['predicted_units'])
-                        st.caption(f"Showing {len(forecast_history)} daily predictions from {forecast_history['date'].min().date()} to {forecast_history['date'].max().date()}")
-            
-            else:
-                # Use simple prediction for dates within or close to historical range
-                st.info("📅 Using direct prediction (target date is within historical range)")
-                
-                # Create input based on most recent sample
-                input_row = prepare_prediction_input(recent_samples, prediction_inputs)
-
-                # Create DataFrame for prediction
-                input_df = pd.DataFrame([input_row])
-
-                # Select only the features used by the model
-                X_pred = input_df[model_features]
-
-                # Make prediction
-                prediction = specific_model.predict(X_pred)[0]
-                
-                # Convert from log scale if needed (since your target is 'logunits')
-                # The model predicts logunits, so we need to convert back to units
-                prediction_units = np.exp(prediction)
-
-
             # Display results
             display_prediction_results(
-                prediction_units,
+                result.prediction_value,
                 store_id,
                 item_id,
                 prediction_inputs,
@@ -425,8 +369,8 @@ def generate_prediction(
                 store_names,
                 item_names,
                 specific_model,
-                model_features,  # Always pass model_features now
-                forecast_history if days_gap > 1 else None,  # Pass forecast history
+                model_features,
+                result.forecast_history,
             )
 
         except Exception as e:
@@ -434,61 +378,11 @@ def generate_prediction(
             st.info(
                 "Please ensure all required features are available in the input data."
             )
-            # Print more detailed error for debugging
             import traceback
-
             st.error(traceback.format_exc())
 
 
-def prepare_prediction_input(recent_samples, prediction_inputs):
-    """Prepare input row for prediction based on recent sample and user inputs"""
-
-    # Create input row based on most recent sample
-    # This preserves all lag features, rolling stats, and EWMA features
-    input_row = recent_samples.iloc[0].copy()
-
-    # Update date-related features
-    input_row["date"] = pd.to_datetime(prediction_inputs["date"])
-    input_row["day"] = prediction_inputs["day"]
-    input_row["month"] = prediction_inputs["month"]
-    input_row["year"] = prediction_inputs["year"]
-    input_row["day_of_week"] = prediction_inputs["day_of_week"]
-    input_row["is_weekend"] = prediction_inputs["is_weekend"]
-    
-    # Update holiday features
-    input_row["is_holiday"] = prediction_inputs["is_holiday"]
-    if "is_blackfriday" in input_row:
-        input_row["is_blackfriday"] = prediction_inputs["is_blackfriday"]
-
-    # Update season features (one-hot encoding)
-    # Features have: season_Spring, season_Summer, season_Winter (Fall is baseline with all 0s)
-    for s in ["Spring", "Summer", "Winter"]:
-        col_name = f"season_{s}"
-        if col_name in input_row:
-            input_row[col_name] = 1 if prediction_inputs["season"] == s else 0
-    
-    # Update weather numerical features
-    weather_features = ["tmax", "cool", "preciptotal", "stnpressure", "sealevel", "resultspeed", "resultdir"]
-    for feature in weather_features:
-        if feature in input_row:
-            input_row[feature] = prediction_inputs[feature]
-
-    # Update weather code features (binary indicators)
-    weather_codes = [
-        'BCFG', 'BLDU', 'BLSN', 'BR', 'DU', 'DZ', 'FG', 'FG+', 'FU', 
-        'FZDZ', 'FZFG', 'FZRA', 'GR', 'GS', 'HZ', 'MIFG', 'PL', 'PRFG', 
-        'RA', 'SG', 'SN', 'SQ', 'TS', 'TSRA', 'TSSN', 'UP', 'VCFG', 'VCTS'
-    ]
-    
-    for code in weather_codes:
-        if code in input_row:
-            # Get value from prediction_inputs, default to 0 if not provided
-            input_row[code] = prediction_inputs.get(code, 0)
-
-    # Note: Lag features, rolling statistics, and EWMA features are preserved from recent_samples
-    # These cannot be manually input and must come from historical data
-    
-    return input_row
+# prepare_prediction_input() has been moved to src/core/model.py (ModelManager.prepare_input())
 
 
 def display_prediction_results(
@@ -529,11 +423,11 @@ def display_prediction_results(
         else:
             st.write(f"**Product ID:** {item_id}")
 
-        st.write(f"**Date:** {prediction_inputs['date'].strftime('%B %d, %Y')}")
-        st.write(f"**Season:** {prediction_inputs['season']}")
-        if prediction_inputs["is_holiday"]:
+        st.write(f"**Date:** {prediction_inputs.date.strftime('%B %d, %Y')}")
+        st.write(f"**Season:** {prediction_inputs.season}")
+        if prediction_inputs.is_holiday:
             st.write("**Holiday:** Yes")
-        if prediction_inputs.get("is_blackfriday", 0):
+        if prediction_inputs.is_blackfriday:
             st.write("**Black Friday:** Yes")
 
     with res_col2:
@@ -581,7 +475,7 @@ def display_prediction_results(
                 st.write(f"**Date:** {max_date.strftime('%b %d, %Y')}")
 
     # Historical context
-    display_historical_context(historical, prediction_inputs["date"], prediction_value, forecast_history)
+    display_historical_context(historical, prediction_inputs.date, prediction_value, forecast_history)
 
     # Feature importance
     if model_features is not None:
