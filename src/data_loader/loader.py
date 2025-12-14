@@ -4,17 +4,24 @@ import pickle
 import pandas as pd
 import streamlit as st
 
+from src.config import (
+    LGBM_MODELS_PKL,
+    FEATURE_STATS_JSON,
+    WEATHER_KEY_STORE_CSV,
+    FEATURE_ENGINEERED_FEATHER,
+)
+
 
 @st.cache_resource
 def load_model():
     """Load the trained sales forecast models dictionary"""
     try:
-        with open("models/lgbm_models_dict.pkl", "rb") as file:
+        with open(LGBM_MODELS_PKL, "rb") as file:
             models_dict = pickle.load(file)
         return models_dict
     except FileNotFoundError:
         st.error(
-            "Model file not found. Please ensure 'models/lgbm_models_dict.pkl' exists."
+            f"Model file not found. Please ensure '{LGBM_MODELS_PKL}' exists."
         )
         return None
 
@@ -23,12 +30,12 @@ def load_model():
 def load_feature_stats():
     """Load feature statistics used for normalization"""
     try:
-        with open("models/feature_stats.json", "r") as file:
+        with open(FEATURE_STATS_JSON, "r") as file:
             feature_stats = json.load(file)
         return feature_stats
     except FileNotFoundError:
         st.error(
-            "Feature stats file not found. Please ensure 'models/feature_stats.json' exists."
+            f"Feature stats file not found. Please ensure '{FEATURE_STATS_JSON}' exists."
         )
         return {}
 
@@ -38,7 +45,7 @@ def load_data():
     """Load preprocessed sales data"""
     try:
         # Load the preprocessed data
-        df = pd.read_csv("data/data_processed/weather_key_store_merged.csv")
+        df = pd.read_csv(WEATHER_KEY_STORE_CSV)
 
         # Filter out kaggle test data
         if "is_kaggle_test" in df.columns:
@@ -51,7 +58,7 @@ def load_data():
         return df
     except FileNotFoundError:
         st.error(
-            "Data file not found. Please ensure 'data/data_processed/weather_key_store_merged.csv' exists."
+            f"Data file not found. Please ensure '{WEATHER_KEY_STORE_CSV}' exists."
         )
         # Return empty DataFrame with expected columns as fallback
         return pd.DataFrame(columns=["date", "store", "sales"])
@@ -64,13 +71,13 @@ def load_feature_engineered_data():
         import pyarrow.feather as feather
 
         feature_engineered_data = feather.read_feather(
-            "data/data_processed/feature_engineered_data_88_features.feather"
+            FEATURE_ENGINEERED_FEATHER
         )
         return feature_engineered_data
     except Exception as e:
         st.error(f"Error loading feature engineered data: {str(e)}")
         st.info(
-            "Please ensure the file 'data/data_processed/feature_engineered_data_89_features.feather' exists."
+            f"Please ensure the file '{FEATURE_ENGINEERED_FEATHER}' exists."
         )
         return pd.DataFrame()
 

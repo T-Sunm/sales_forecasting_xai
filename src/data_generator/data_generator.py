@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 
+from src.config import WEATHER_DATA_CSV, SALES_2016_CSV, SALES_2017_CSV
+
 # Set random seed for reproducibility
 np.random.seed(2025)
 
@@ -716,7 +718,7 @@ def main():
     )
 
     # Save weather data
-    weather_df.to_csv("data/weather_data.csv", index=False)
+    weather_df.to_csv(WEATHER_DATA_CSV, index=False)
     print(f"Saved weather data with {len(weather_df)} records")
 
     # Generate 2016 sales data
@@ -730,7 +732,7 @@ def main():
     )
 
     # Save 2016 sales data
-    sales_2016.to_csv("data/2016_sales.csv", index=False)
+    sales_2016.to_csv(SALES_2016_CSV, index=False)
     print(f"Saved 2016 sales data with {len(sales_2016)} records")
 
     # Generate 2017 sales data
@@ -744,7 +746,7 @@ def main():
     )
 
     # Save 2017 sales data
-    sales_2017.to_csv("data/2017_sales.csv", index=False)
+    sales_2017.to_csv(SALES_2017_CSV, index=False)
     print(f"Saved 2017 sales data with {len(sales_2017)} records")
 
     # Print statistics
@@ -765,9 +767,9 @@ def main():
     print(f"Missing values: {check_missing_values(sales_2017)}")
 
     print("\nFiles saved to data/ directory:")
-    print("- data/weather_data.csv")
-    print("- data/2016_sales.csv")
-    print("- data/2017_sales.csv")
+    print(f"- {WEATHER_DATA_CSV}")
+    print(f"- {SALES_2016_CSV}")
+    print(f"- {SALES_2017_CSV}")
 
 
 if __name__ == "__main__":
