@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -199,6 +200,38 @@ def plot_store_comparison(filtered_data, store_identifier="store"):
     ax.invert_yaxis()  # Labels read top-to-bottom
     ax.set_xlabel("Units Sold")
     ax.set_title("Top 10 Stores by Units")
+    
+    # Format x-axis with comma separators
+    ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, p: f'{int(x):,}'))
+
+    return fig
+
+
+def plot_product_comparison(filtered_data, item_identifier="item_nbr"):
+    """Generate horizontal bar chart for top products by sales"""
+    fig, ax = plt.subplots(figsize=(6, 6))
+
+    # Group by product
+    product_sales = (
+        filtered_data.groupby(item_identifier)["units"]
+        .sum()
+        .sort_values(ascending=False)
+    )
+
+    # Take top 10 products
+    top_products = product_sales.head(10)
+
+    # Plot horizontal bar chart
+    y_pos = np.arange(len(top_products))
+    ax.barh(y_pos, top_products.values, align="center", color="steelblue")
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(top_products.index)
+    ax.invert_yaxis()  # Labels read top-to-bottom
+    ax.set_xlabel("Units Sold")
+    ax.set_title("Top 10 Products by Units")
+    
+    # Format x-axis with comma separators
+    ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, p: f'{int(x):,}'))
 
     return fig
 

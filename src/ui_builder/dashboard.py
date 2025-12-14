@@ -4,6 +4,7 @@ import streamlit as st
 from src.ui_builder.data_viz import (
     plot_category_distribution,
     plot_day_of_week_pattern,
+    plot_product_comparison,
     plot_sales_distribution,
     plot_sales_time_series,
     plot_store_comparison,
@@ -228,86 +229,108 @@ def display_sales_trends(filtered_data):
 
 
 def display_performance_breakdown(filtered_data):
-    """Display performance breakdown section with category and store comparisons"""
+    """Display performance breakdown section with top products and store comparisons"""
 
     st.header("Performance Breakdown")
+    
+    # Check what content will be displayed
+    has_multiple_products = (
+        "item_nbr" in filtered_data.columns
+        and len(filtered_data["item_nbr"].unique()) > 1
+    )
+    has_multiple_stores = (
+        ("store_name" in filtered_data.columns or "store_nbr" in filtered_data.columns)
+        and (
+            ("store_name" in filtered_data.columns and len(filtered_data["store_name"].unique()) > 1)
+            or ("store_nbr" in filtered_data.columns and len(filtered_data["store_nbr"].unique()) > 1)
+        )
+    )
+    
+    # Nothing to display
+    if not has_multiple_products and not has_multiple_stores:
+        st.info("Select 'All Stores' or 'All Products' to view performance breakdown.")
+        return
 
-    col1, col2 = st.columns(2)
-
-    with col1:
-        # Category performance if available
-        if (
-            "category" in filtered_data.columns
-            and len(filtered_data["category"].unique()) > 1
-        ):
-            st.subheader("Category Performance")
-
-            # Group by category
-            category_sales = (
-                filtered_data.groupby("category")["units"]
+    # Use two columns when both products and stores are available
+    if has_multiple_products and has_multiple_stores:
+        col1, col2 = st.columns(2)
+        
+        # Top Products in left column
+        with col1:
+            st.subheader("Top Products")
+            product_sales = (
+                filtered_data.groupby("item_nbr")["units"]
                 .sum()
                 .sort_values(ascending=False)
             )
-
-            # Calculate percentage of total
-            category_sales_pct = (category_sales / category_sales.sum() * 100).round(1)
-
-            # Create DataFrame for display
-            category_df = pd.DataFrame(
-                {"Sales": category_sales, "Percentage": category_sales_pct}
-            ).reset_index()
-
-            # Format for display
-            category_df["Sales"] = category_df["Sales"].apply(lambda x: f"{x:,.0f}")
-            category_df["Percentage"] = category_df["Percentage"].apply(
-                lambda x: f"{x}%"
-            )
-
-            st.dataframe(category_df, use_container_width=True)
-
-            # Create pie chart
-            fig = plot_category_distribution(filtered_data)
+            top_products = product_sales.head(10)
+            product_df = pd.DataFrame({
+                "Product": top_products.index,
+                "Sales": top_products.values,
+            })
+            product_df["Sales"] = product_df["Sales"].apply(lambda x: f"{x:,.0f}")
+            st.dataframe(product_df, use_container_width=True)
+            fig = plot_product_comparison(filtered_data, "item_nbr")
             st.pyplot(fig)
-
-    with col2:
-        # Store comparison if all stores selected
-        if (
-            st.session_state.selected_store_name == "All Stores"
-            and st.session_state.selected_store == "All Stores"
-        ) and (
-            "store_name" in filtered_data.columns or "store_nbr" in filtered_data.columns
-        ):
-            st.subheader("Store Comparison")
-
-            # Determine store identifier
+        
+        # Top Stores in right column
+        with col2:
+            st.subheader("Top Stores")
             if "store_name" in filtered_data.columns:
                 store_identifier = "store_name"
             else:
                 store_identifier = "store_nbr"
-
-            # Group by store and create DataFrame
             store_sales = (
                 filtered_data.groupby(store_identifier)["units"]
                 .sum()
                 .sort_values(ascending=False)
             )
-
-            # Take top 10 stores
             top_stores = store_sales.head(10)
-
-            # Create DataFrame for display
-            store_df = pd.DataFrame(
-                {
-                    "Store": top_stores.index,
-                    "Sales": top_stores.values,
-                }
-            )
-
-            # Format for display
+            store_df = pd.DataFrame({
+                "Store": top_stores.index,
+                "Sales": top_stores.values,
+            })
             store_df["Sales"] = store_df["Sales"].apply(lambda x: f"{x:,.0f}")
-
             st.dataframe(store_df, use_container_width=True)
-
-            # Create bar chart
             fig = plot_store_comparison(filtered_data, store_identifier)
             st.pyplot(fig)
+    
+    # Only Products - use full width
+    elif has_multiple_products:
+        st.subheader("Top Products")
+        product_sales = (
+            filtered_data.groupby("item_nbr")["units"]
+            .sum()
+            .sort_values(ascending=False)
+        )
+        top_products = product_sales.head(10)
+        product_df = pd.DataFrame({
+            "Product": top_products.index,
+            "Sales": top_products.values,
+        })
+        product_df["Sales"] = product_df["Sales"].apply(lambda x: f"{x:,.0f}")
+        st.dataframe(product_df, use_container_width=True)
+        fig = plot_product_comparison(filtered_data, "item_nbr")
+        st.pyplot(fig)
+    
+    # Only Stores - use full width
+    elif has_multiple_stores:
+        st.subheader("Top Stores")
+        if "store_name" in filtered_data.columns:
+            store_identifier = "store_name"
+        else:
+            store_identifier = "store_nbr"
+        store_sales = (
+            filtered_data.groupby(store_identifier)["units"]
+            .sum()
+            .sort_values(ascending=False)
+        )
+        top_stores = store_sales.head(10)
+        store_df = pd.DataFrame({
+            "Store": top_stores.index,
+            "Sales": top_stores.values,
+        })
+        store_df["Sales"] = store_df["Sales"].apply(lambda x: f"{x:,.0f}")
+        st.dataframe(store_df, use_container_width=True)
+        fig = plot_store_comparison(filtered_data, store_identifier)
+        st.pyplot(fig)
