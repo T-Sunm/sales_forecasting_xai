@@ -77,7 +77,41 @@
 │   └── utils/
 └── README.md
 ```
-
+```bash
+sales_forecasting_xai/
+├── data/                    # Chứa data (nên ignore trong git, dùng DVC nếu cần)
+│   ├── raw/
+│   └── processed/
+├── models/                  # Chứa file .pkl, .bst (LightGBM models)
+├── notebooks/               # Chỉ dùng để EDA, test ý tưởng (giữ 01_preprocessing.ipynb ở đây)
+├── logs/                    # Folder mount ra ngoài để lưu log file từ container
+├── src/                     # SOURCE CODE CHÍNH
+│   ├── __init__.py
+│   ├── config.py            # Quản lý Env vars, Path (tránh hardcode path)
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   └── logger.py        # Centralized Logging config ⭐ (Yêu cầu của bạn)
+│   ├── core/                # CORE LOGIC (Quan trọng nhất)
+│   │   ├── __init__.py
+│   │   ├── preprocessing.py # Logic xử lý data sạch từ notebook chuyển sang
+│   │   ├── model.py         # Code load model, predict
+│   │   └── xai.py           # Logic tính toán SHAP/Explainability
+│   ├── api/                 # BACKEND (FastAPI)
+│   │   ├── __init__.py
+│   │   ├── main.py          # Entry point của FastAPI
+│   │   ├── schemas.py       # Pydantic models (Input/Output data validation)
+│   │   └── routers/         # Chia nhỏ các api endpoint (predict, explain...)
+│   └── ui/                  # FRONTEND (Streamlit) - Refactor từ code cũ
+│       ├── app.py           # Entry point Streamlit
+│       └── components/      # Các widget visualization
+├── tests/                   # Unit test (rất quan trọng trong MLOps)
+├── .env                     # Biến môi trường
+├── .gitignore
+├── docker-compose.yml       # Orchestration ⭐
+├── Dockerfile.api           # Image cho FastAPI ⭐
+├── Dockerfile.ui            # Image cho Streamlit ⭐
+└── requirements.txt         # Hoặc pyproject.toml
+```
 ## Installation
 
 1. **Clone the Repository**
