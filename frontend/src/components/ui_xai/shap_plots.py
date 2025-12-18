@@ -21,7 +21,8 @@ def plot_global_feature_importance(
     feature_names,
     top_n=20,
     figsize=(10, 8),
-    title='Global Feature Importance'
+    title='Global Feature Importance',
+    importance_df=None
 ):
     """
     Plot global feature importance as horizontal bar chart
@@ -32,18 +33,26 @@ def plot_global_feature_importance(
         top_n: number of top features to display
         figsize: tuple of (width, height)
         title: plot title
+        importance_df: Optional DataFrame with 'feature' and 'importance' columns
     
     Returns:
         matplotlib.figure.Figure object
     """
-    # Calculate mean absolute SHAP values
-    mean_abs_shap = np.abs(shap_values).mean(axis=0)
+    # Create DataFrame
+    if importance_df is None:
+        if shap_values is None:
+            return None
+        # Calculate mean absolute SHAP values
+        mean_abs_shap = np.abs(shap_values).mean(axis=0)
+        
+        # Create DataFrame and sort
+        importance_df = pd.DataFrame({
+            'feature': feature_names,
+            'importance': mean_abs_shap
+        })
     
-    # Create DataFrame and sort
-    importance_df = pd.DataFrame({
-        'feature': feature_names,
-        'importance': mean_abs_shap
-    }).sort_values('importance', ascending=False).head(top_n)
+    # Sort and take top_n
+    importance_df = importance_df.sort_values('importance', ascending=False).head(top_n)
     
     # Create figure
     fig, ax = plt.subplots(figsize=figsize)
@@ -331,6 +340,122 @@ def plot_shap_dependence(
     ax.set_xlabel(f'{feature_name} (Feature Value)', fontsize=11, fontweight='bold')
     ax.set_ylabel(f'SHAP Value for {feature_name}', fontsize=11, fontweight='bold')
     ax.grid(alpha=0.3)
+    
+    plt.tight_layout()
+    return fig
+
+
+def plot_api_dependence(
+    dependence_data,
+    figsize=(10, 6)
+):
+    """
+    Create SHAP dependence plot from API data
+    
+    Args:
+        dependence_data: Dict containing feature_values, shap_values, etc.
+        figsize: tuple of (width, height)
+    
+    Returns:
+        matplotlib.figure.Figure object
+    """
+    fig, ax = plt.subplots(figsize=figsize)
+    
+    feature_name = dependence_data['feature']
+    feature_values = dependence_data['feature_values']
+    shap_vals = dependence_data['shap_values']
+    
+    # Check for interaction
+    interaction_feature = dependence_data.get('interaction_feature')
+    interaction_values = dependence_data.get('interaction_values')
+    
+    # Scatter plot
+    if interaction_values:
+        scatter = ax.scatter(
+            feature_values, shap_vals,
+            c=interaction_values, cmap='coolwarm', alpha=0.7, s=20
+        )
+        # Add colorbar
+        cb = plt.colorbar(scatter, ax=ax)
+        cb.set_label(interaction_feature, fontsize=10)
+    else:
+        ax.scatter(feature_values, shap_vals, alpha=0.7, s=20, color='steelblue')
+    
+    # Customize
+    ax.set_title(
+        f'SHAP Dependence Plot: {feature_name}',
+        fontsize=13, fontweight='bold', pad=15
+    )
+    ax.set_xlabel(f'{feature_name} (Feature Value)', fontsize=11, fontweight='bold')
+    ax.set_ylabel(f'SHAP Value for {feature_name}', fontsize=11, fontweight='bold')
+    ax.grid(alpha=0.3)
+    
+    plt.tight_layout()
+    return fig
+
+
+def plot_api_waterfall(
+    explanation_data,
+    figsize=(10, 6)
+):
+    """
+    Create SHAP waterfall plot from API data
+    
+    Args:
+        explanation_data: Dict containing base_value, prediction, features list
+        figsize: tuple of (width, height)
+    
+    Returns:
+        matplotlib.figure.Figure object
+    """
+    fig, ax = plt.subplots(figsize=figsize)
+    
+    expected_value = explanation_data['base_value']
+    prediction = explanation_data['prediction']
+    features = explanation_data['features']
+    
+    # Sort features by absolute impact just in case, or assume API did it
+    # API sorts by abs(shap) descending
+    
+    # Prepare waterfall data
+    cumsum = expected_value
+    positions = []
+    values = []
+    colors_list = []
+    labels = []
+    
+    # Process features (API returns sorted list)
+    for feat in features:
+        shap_val = feat['shap_impact']
+        feat_val = feat['value']
+        feat_name = feat['feature']
+        
+        positions.append(cumsum)
+        values.append(shap_val)
+        colors_list.append('green' if shap_val > 0 else 'red')
+        
+        labels.append(f"{feat_name}\n= {feat_val:.2f}")
+        cumsum += shap_val
+    
+    # Plot
+    y_pos = np.arange(len(values))
+    ax.barh(y_pos, values, left=positions, color=colors_list, alpha=0.7)
+    
+    # Add lines
+    ax.axvline(expected_value, color='black', linestyle='--', linewidth=2, label=f'Base: {expected_value:.2f}')
+    ax.axvline(prediction, color='blue', linestyle='--', linewidth=2, label=f'Pred: {prediction:.2f}')
+    
+    # Customize
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(labels, fontsize=9)
+    ax.invert_yaxis()
+    ax.set_xlabel('Model Output (log units)', fontsize=11, fontweight='bold')
+    ax.set_title(
+        'SHAP Waterfall Plot (API)',
+        fontsize=13, fontweight='bold', pad=15
+    )
+    ax.legend(loc='best', fontsize=9)
+    ax.grid(axis='x', alpha=0.3)
     
     plt.tight_layout()
     return fig

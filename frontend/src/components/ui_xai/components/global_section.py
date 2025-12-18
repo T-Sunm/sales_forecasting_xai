@@ -80,9 +80,13 @@ def _render_tab1_top_features(
             fig_top_features = plot_global_feature_importance(
                 shap_values,
                 feature_names,
-                top_n=20
+                top_n=20,
+                importance_df=importance_df
             )
-            st.pyplot(fig_top_features)
+            if fig_top_features:
+                st.pyplot(fig_top_features)
+            else:
+                st.warning("⚠️ Cannot plot top features")
         
         with col2:
             st.markdown("**Top 10 Features:**")
@@ -96,20 +100,21 @@ def _render_tab1_top_features(
             )
         
         # AI Analysis Button
-        render_ai_analysis_button(
-            button_text="✨ Analyze Top Features",
-            button_key="tab1_ai_btn",
-            llm_generator=llm_generator,
-            fig=fig_top_features,
-            generate_func=llm_generator.generate_global_report if llm_generator else None,
-            title="🤖 Top Features Analysis",
-            figure_prefix="top_features",
-            store_nbr=store_nbr,
-            item_nbr=item_nbr,
-            importance_df=importance_df,
-            category_summary=category_summary,
-            tab_type="top_features"
-        )
+        if fig_top_features:
+            render_ai_analysis_button(
+                button_text="✨ Analyze Top Features",
+                button_key="tab1_ai_btn",
+                llm_generator=llm_generator,
+                fig=fig_top_features,
+                generate_func=llm_generator.generate_global_report if llm_generator else None,
+                title="🤖 Top Features Analysis",
+                figure_prefix="top_features",
+                store_nbr=store_nbr,
+                item_nbr=item_nbr,
+                importance_df=importance_df,
+                category_summary=category_summary,
+                tab_type="top_features"
+            )
 
 
 def _render_tab2_categories(
@@ -176,6 +181,11 @@ def _render_tab3_beeswarm(
         Position shows SHAP impact on prediction.
         """)
         
+        if shap_values is None or X_sample is None:
+            st.info("ℹ️ SHAP Beeswarm plot requires local raw data processing. Currently using API mode.")
+            st.warning("Please switch to local mode or check back later for detailed SHAP plots.")
+            return
+
         # Generate the plot
         fig_beeswarm = plot_shap_beeswarm(
             shap_values,

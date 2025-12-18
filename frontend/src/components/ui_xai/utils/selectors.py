@@ -8,28 +8,24 @@ import streamlit as st
 from ..llm_explainer import SalesInsightGenerator
 
 
-def create_store_item_selector(feature_engineered_data, models_dict):
+def create_store_item_selector(models_list):
     """
     Create sidebar selector for store and item
     
     Args:
-        feature_engineered_data: Feature dataset
-        models_dict: Dictionary of models
+        models_list: List of dicts [{'store_id': 1, 'item_id': 2}, ...] from API
     
     Returns:
         tuple: (store_nbr, item_nbr)
     """
     st.sidebar.header("🎯 Select Store & Item")
     
-    # Get available (store, item) pairs from models_dict
-    available_pairs = list(models_dict.keys())
-    
-    if len(available_pairs) == 0:
+    if not models_list:
         st.sidebar.error("No models available")
         return None, None
     
-    # Extract unique stores and items
-    available_stores = sorted(set(int(pair[0]) for pair in available_pairs))
+    # Extract unique stores
+    available_stores = sorted(list(set(m['store_id'] for m in models_list)))
     
     # Store selection
     store_nbr = st.sidebar.selectbox(
@@ -40,8 +36,8 @@ def create_store_item_selector(feature_engineered_data, models_dict):
     
     # Get available items for selected store
     available_items = sorted([
-        int(pair[1]) for pair in available_pairs 
-        if int(pair[0]) == store_nbr
+        m['item_id'] for m in models_list 
+        if m['store_id'] == store_nbr
     ])
     
     if len(available_items) == 0:

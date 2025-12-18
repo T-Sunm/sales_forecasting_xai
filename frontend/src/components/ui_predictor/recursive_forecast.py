@@ -1,53 +1,25 @@
 """
-UI wrapper for recursive forecasting with Streamlit integration.
-This file bridges Core layer (pure logic) and UI layer (Streamlit).
+[DEPRECATED] UI wrapper for recursive forecasting with Streamlit integration.
+
+This file is NO LONGER USED after Frontend-Backend split.
+Backend API (/prediction/predict) now handles recursive forecasting internally.
+
+Kept for reference only. Will be removed in future cleanup.
 """
 
-import streamlit as st
-from src.core.forecasting import recursive_forecast as core_recursive_forecast
+# DEPRECATED - Backend handles this now
+# from src.core.forecasting import recursive_forecast as core_recursive_forecast
 
+# def recursive_forecast_ui(*args, **kwargs):
+#     """
+#     [DEPRECATED] Streamlit wrapper for recursive_forecast from Core layer.
+#     
+#     Backend API endpoint /prediction/predict now handles:
+#     - Recursive day-by-day forecasting
+#     - Feature preparation with lag/rolling/EWMA
+#     - Progress tracking (on backend side)
+#     
+#     No longer needed in frontend.
+#     """
+#     pass
 
-def recursive_forecast_ui(*args, **kwargs):
-    """
-    Streamlit wrapper for recursive_forecast from Core layer.
-    Adds progress bar and info messages for better UX.
-    """
-    # Extract parameters
-    target_date = kwargs.get('target_date')
-    feature_engineered_data = kwargs.get('feature_engineered_data')
-    store_col = kwargs.get('store_col')
-    item_col = kwargs.get('item_col')
-    store_id = kwargs.get('store_id')
-    item_id = kwargs.get('item_id')
-    
-    # Get last historical date for info display
-    historical_data = feature_engineered_data[
-        (feature_engineered_data[store_col] == store_id) &
-        (feature_engineered_data[item_col] == item_id)
-    ]
-    last_historical_date = historical_data['date'].max()
-    days_to_forecast = (target_date - last_historical_date).days
-    
-    # Display info message
-    st.info(
-        f"🔄 Performing recursive forecasting for {days_to_forecast} days "
-        f"from {last_historical_date.date()} to {target_date.date()}"
-    )
-    
-    # Create progress bar
-    progress_bar = st.progress(0)
-    
-    def progress_callback(current, total):
-        """Update Streamlit progress bar"""
-        progress_bar.progress(current / total)
-    
-    # Add progress callback to kwargs
-    kwargs['progress_callback'] = progress_callback
-    
-    # Call core function
-    result = core_recursive_forecast(*args, **kwargs)
-    
-    # Clear progress bar
-    progress_bar.empty()
-    
-    return result

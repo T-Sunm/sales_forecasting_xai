@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 
-from src.ui_builder.data_viz import (
+from components.ui_builder.data_viz import (
     plot_category_distribution,
     plot_day_of_week_pattern,
     plot_product_comparison,

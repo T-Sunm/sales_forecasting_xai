@@ -6,17 +6,21 @@ import pandas as pd
 import seaborn as sns
 import streamlit as st
 
-from src.core.model import ModelManager, PredictionInput
+from services import get_api_client
+from utils.data_helpers import get_top_data_pair
 
 
-def sales_prediction_view(data, model, feature_stats, feature_engineered_data):
-    """Display the sales prediction tool interface"""
-
+def sales_prediction_view(data, api_client, feature_stats, feature_engineered_data):
+    """
+    Display the sales prediction tool interface
+    
+    Args:
+        data: Historical data for visualization
+        api_client: APIClient instance for backend communication
+        feature_stats: Feature statistics dictionary
+        feature_engineered_data: Full feature-engineered dataset
+    """
     st.title("Sales Prediction Tool")
-
-    if model is None:
-        st.error("Model not loaded. Please check if the model file exists.")
-        return
 
     if feature_engineered_data.empty:
         st.error("Feature engineered data not loaded.")
@@ -59,10 +63,10 @@ def sales_prediction_view(data, model, feature_stats, feature_engineered_data):
     prediction_inputs = collect_prediction_inputs()
 
     # Make prediction button
-    if st.button("Predict Sales"):
+    if st.button("Predict Sales", type="primary"):
         generate_prediction(
+            api_client,
             feature_engineered_data,
-            model,
             store_id,
             item_id,
             store_col,
@@ -106,8 +110,6 @@ def create_product_selection_sidebar(
 ):
     """Create sidebar for store and product selection"""
 
-    from src.data_loader.loader import get_top_data_pair
-    
     # Get top pair for default selection
     top_store, top_item = get_top_data_pair(df)
     
@@ -290,33 +292,38 @@ def collect_prediction_inputs():
     else:
         season = "Fall"  # Baseline
 
-    # Return Pydantic model instead of dict
-    return PredictionInput(
-        date=prediction_date,
-        year=year,
-        month=month,
-        day=day,
-        day_of_week=day_of_week,
-        is_weekend=is_weekend,
-        season=season,
-        is_holiday=int(is_holiday),
-        is_blackfriday=int(is_blackfriday),
+    # Return dictionary for API call (not Pydantic model)
+    prediction_dict = {
+        "date": prediction_date.isoformat(),
+        "year": year,
+        "month": month,
+        "day": day,
+        "day_of_week": day_of_week,
+        "is_weekend": is_weekend,
+        "season": season,
+        "is_holiday": int(is_holiday),
+        "is_blackfriday": int(is_blackfriday),
         # Weather features
-        tmax=tmax,
-        cool=cool,
-        preciptotal=preciptotal,
-        stnpressure=stnpressure,
-        sealevel=sealevel,
-        resultspeed=resultspeed,
-        resultdir=resultdir,
+        "tmax": tmax,
+        "cool": cool,
+        "preciptotal": preciptotal,
+        "stnpressure": stnpressure,
+        "sealevel": sealevel,
+        "resultspeed": resultspeed,
+        "resultdir": resultdir,
         # Weather codes
         **{code: int(value) for code, value in weather_codes.items()},
-    )
+    }
+    
+    # Also attach original date object for display purposes
+    prediction_dict["_date_obj"] = prediction_date
+    
+    return prediction_dict
 
 
 def generate_prediction(
+    api_client,
     feature_engineered_data,
-    model,
     store_id,
     item_id,
     store_col,
@@ -327,37 +334,48 @@ def generate_prediction(
     store_names,
     item_names,
 ):
-    """Generate sales prediction and display results using ModelManager"""
-
-    with st.spinner("Generating prediction..."):
+    """
+    Generate sales prediction using Backend API and display results
+    
+    Args:
+        api_client: APIClient instance
+        feature_engineered_data: Full dataset for context
+        store_id, item_id: Selected store and item
+        prediction_inputs: Dictionary with prediction parameters
+        Other args: Display formatting options
+    """
+    with st.spinner("🔮 Generating prediction via backend API..."):
         try:
-            # Initialize ModelManager
-            model_manager = ModelManager()
-            model_manager.models_dict = model  # Use already-loaded models from app.py
+            # Extract date object for display (if exists)
+            date_obj = prediction_inputs.pop("_date_obj", None)
             
-            # Use Core layer to generate prediction
-            result = model_manager.predict(
+            # Call backend API
+            result = api_client.predict(
                 store_id=store_id,
                 item_id=item_id,
-                prediction_input=prediction_inputs,  # Already a PredictionInput (Pydantic)
-                feature_engineered_data=feature_engineered_data,
-                store_col=store_col,
-                item_col=item_col,
-                use_recursive=True
+                prediction_input=prediction_inputs
             )
             
-            # Check for errors
-            if result.error:
-                st.error(result.error)
+            # Check for errors (check if error VALUE is truthy, not just if key exists)
+            if not result or result.get("error"):
+                error_msg = result.get("error", "Unknown error") if result else "No response from backend"
+                st.error(f"❌ Prediction failed: {error_msg}")
                 return
             
-            # Get model for feature importance display
-            specific_model = model_manager.get_model(store_id, item_id)
-            model_features = specific_model.feature_name_ if specific_model else None
+            # Extract prediction value
+            prediction_value = result.get("prediction_value")
             
-            # Display results
+            if prediction_value is None:
+                st.error("❌ No prediction value returned from backend")
+                return
+            
+            # Restore date object for display
+            if date_obj:
+                prediction_inputs["_date_obj"] = date_obj
+            
+            # Display results (no model/features for now - backend doesn't return them)
             display_prediction_results(
-                result.prediction_value,
+                prediction_value,
                 store_id,
                 item_id,
                 prediction_inputs,
@@ -368,18 +386,18 @@ def generate_prediction(
                 has_item_names,
                 store_names,
                 item_names,
-                specific_model,
-                model_features,
-                result.forecast_history,
+                model=None,  # Not available from API
+                model_features=None,  # Not available from API
+                forecast_history=None,  # Not available from API yet
             )
+            
+            st.success("✅ Prediction completed successfully!")
 
         except Exception as e:
-            st.error(f"Error making prediction: {str(e)}")
-            st.info(
-                "Please ensure all required features are available in the input data."
-            )
+            st.error(f"❌ Error making prediction: {str(e)}")
             import traceback
-            st.error(traceback.format_exc())
+            with st.expander("Show error details"):
+                st.code(traceback.format_exc())
 
 
 # prepare_prediction_input() has been moved to src/core/model.py (ModelManager.prepare_input())
@@ -423,11 +441,20 @@ def display_prediction_results(
         else:
             st.write(f"**Product ID:** {item_id}")
 
-        st.write(f"**Date:** {prediction_inputs.date.strftime('%B %d, %Y')}")
-        st.write(f"**Season:** {prediction_inputs.season}")
-        if prediction_inputs.is_holiday:
+        # Handle date display (dict vs Pydantic model)
+        date_display = prediction_inputs.get("_date_obj") or prediction_inputs.get("date")
+        if date_display:
+            if isinstance(date_display, str):
+                from datetime import datetime
+                date_display = datetime.fromisoformat(date_display).date()
+            st.write(f"**Date:** {date_display.strftime('%B %d, %Y')}")
+        
+        season = prediction_inputs.get("season", "Unknown")
+        st.write(f"**Season:** {season}")
+        
+        if prediction_inputs.get("is_holiday"):
             st.write("**Holiday:** Yes")
-        if prediction_inputs.is_blackfriday:
+        if prediction_inputs.get("is_blackfriday"):
             st.write("**Black Friday:** Yes")
 
     with res_col2:
@@ -475,11 +502,18 @@ def display_prediction_results(
                 st.write(f"**Date:** {max_date.strftime('%b %d, %Y')}")
 
     # Historical context
-    display_historical_context(historical, prediction_inputs.date, prediction_value, forecast_history)
+    date_for_display = prediction_inputs.get("_date_obj") or prediction_inputs.get("date")
+    if isinstance(date_for_display, str):
+        from datetime import datetime
+        date_for_display = datetime.fromisoformat(date_for_display).date()
+    
+    display_historical_context(historical, date_for_display, prediction_value, forecast_history)
 
-    # Feature importance
-    if model_features is not None:
+    # Feature importance (skip if not available from API)
+    if model_features is not None and model is not None:
         display_feature_importance(model, model_features)
+    else:
+        st.info("ℹ️ Feature importance not available via API (backend doesn't return model details yet)")
 
 
 def display_historical_context(historical_data, prediction_date, prediction_value, forecast_history=None):

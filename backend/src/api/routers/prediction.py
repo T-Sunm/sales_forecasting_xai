@@ -24,18 +24,7 @@ async def get_items(store_id: int, data: pd.DataFrame = Depends(get_feature_data
     items = sorted(store_data["item_nbr"].unique().tolist())
     return {"store_id": store_id, "items": items, "count": len(items)}
 
-# 2.5 GET /available_models
-@router.get("/available_models")
-async def get_available_models(manager: ModelManager = Depends(get_model_manager)):
-    """Trả về danh sách (store_id, item_id) pairs có trained model."""
-    if manager.models_dict is None:
-        return {"models": [], "count": 0}
-    
-    models = [
-        {"store_id": store_id, "item_id": item_id} 
-        for (store_id, item_id) in manager.models_dict.keys()
-    ]
-    return {"models": models, "count": len(models)}
+
 
 # 3. POST /predict
 @router.post("/predict", response_model=PredictionOutput)

@@ -4,7 +4,8 @@ Displays SHAP dependence plots for selected features
 """
 
 import streamlit as st
-from ..shap_plots import plot_shap_dependence
+import pandas as pd
+from ..shap_plots import plot_shap_dependence, plot_api_dependence
 from .ai_button import render_ai_analysis_button
 
 
@@ -14,7 +15,8 @@ def display_dependence_analysis(
     importance_df,
     llm_generator=None,
     store_nbr=None,
-    item_nbr=None
+    item_nbr=None,
+    api_client=None
 ):
     """
     Display SHAP dependence plots for top features
@@ -26,6 +28,7 @@ def display_dependence_analysis(
         llm_generator: SalesInsightGenerator instance
         store_nbr: Store ID for context
         item_nbr: Item ID for context
+        api_client: APIClient instance (optional, for fetching data)
     """
     st.header("🔗 Feature Dependence Analysis")
     st.markdown("""
@@ -45,19 +48,54 @@ def display_dependence_analysis(
     # Plot and stats layout
     col1, col2 = st.columns([3, 1])
     
-    with col1:
-        fig = plot_shap_dependence(
-            shap_values,
-            X_sample,
-            selected_feature
-        )
-        st.pyplot(fig)
+    fig = None
+    feature_stats = {}
+    category = "Unknown"
     
+    if api_client:
+        # Fetch data from API
+        with st.spinner(f"Fetching dependence data for {selected_feature}..."):
+            dep_data = api_client.get_dependence(store_nbr, item_nbr, selected_feature)
+        
+        if dep_data:
+            with col1:
+                fig = plot_api_dependence(dep_data)
+                st.pyplot(fig)
+            
+            stats = dep_data.get('stats', {})
+            feature_stats = {
+                'mean': stats.get('mean', 0),
+                'std': stats.get('std', 0),
+                'min': stats.get('min', 0),
+                'max': stats.get('max', 0)
+            }
+        else:
+            st.error("Failed to load dependence data")
+            return
+    else:
+        # Local plotting
+        with col1:
+            fig = plot_shap_dependence(
+                shap_values,
+                X_sample,
+                selected_feature
+            )
+            st.pyplot(fig)
+        
+        desc = X_sample[selected_feature].describe()
+        feature_stats = {
+            'mean': desc['mean'],
+            'std': desc['std'],
+            'min': desc['min'],
+            'max': desc['max']
+        }
+    
+    category = importance_df[importance_df['feature'] == selected_feature]['category'].values[0] if not importance_df.empty else "Unknown"
+
     with col2:
         st.markdown(f"**About {selected_feature}:**")
         
         # Show statistics
-        feature_stats = X_sample[selected_feature].describe()
         st.markdown(f"""
         - **Mean:** {feature_stats['mean']:.2f}
         - **Std:** {feature_stats['std']:.2f}
@@ -66,11 +104,10 @@ def display_dependence_analysis(
         """)
         
         # Feature category
-        category = importance_df[importance_df['feature'] == selected_feature]['category'].values[0]
         st.info(f"**Category:** {category}")
     
     # AI Feature Analysis Button
-    if llm_generator is not None:
+    if llm_generator is not None and fig:
         render_ai_analysis_button(
             button_text="🤖 Explain Feature Impact",
             button_key="feature_analysis_btn",  
@@ -80,12 +117,12 @@ def display_dependence_analysis(
             title=f"🤖 Feature Analysis: {selected_feature}",
             figure_prefix=f"dependence_{selected_feature}",
             feature_name=selected_feature,
-            feature_stats=feature_stats,
+            feature_stats=pd.Series(feature_stats), # LLM expects Series
             category=category,
             store_nbr=store_nbr,
             item_nbr=item_nbr
         )
-    else:
+    elif llm_generator is None:
         col1, col2, col3 = st.columns([1, 1.5, 1])
         with col2:
             st.info("💡 Enter API Key to unlock feature insights")

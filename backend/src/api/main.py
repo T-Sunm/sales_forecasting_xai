@@ -11,7 +11,7 @@ from config import (
 )
 from utils.logger import setup_logging, APILoggingMiddleware
 from core.model import ModelManager
-from api.routers import health, prediction
+from api.routers import health, prediction, xai, models
 
 # 1. Setup Logging
 logger = setup_logging()
@@ -88,7 +88,9 @@ async def add_process_time_header(request: Request, call_next):
 
 # 6. Include Routers
 app.include_router(health.router)
+app.include_router(models.router)
 app.include_router(prediction.router)
+app.include_router(xai.router)
 
 # 7. Root Endpoint
 @app.get("/", tags=["General"])

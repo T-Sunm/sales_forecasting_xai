@@ -11,6 +11,7 @@ FIGURES_DIR = SHARED_DIR.parent / "figures"
 
 DATA_DIR = SHARED_DIR / "data"
 DATA_PROCESSED_DIR = DATA_DIR / "data_processed"
+WEATHER_KEY_STORE_CSV = DATA_PROCESSED_DIR / "weather_key_store_merged.csv"
 FEATURE_ENGINEERED_FEATHER = DATA_PROCESSED_DIR / "feature_engineered_data_88_features.feather"
 
 MODELS_DIR = SHARED_DIR / "models"
