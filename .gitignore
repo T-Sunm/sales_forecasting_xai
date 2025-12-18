@@ -74,3 +74,16 @@ Desktop.ini
 **/*.feather
 
 *.feather
+
+# Shared directory - ignore all large data files
+shared/data/**/*.csv
+shared/data/**/*.feather
+shared/data/**/*.parquet
+shared/models/*.pkl
+shared/logs/*.log
+
+# UV package manager
+uv.lock
+.venv/
+backend/.venv/
+frontend/.venv/

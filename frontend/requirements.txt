@@ -1,0 +1,11 @@
+streamlit==1.35.0
+requests==2.32.3
+google-generativeai==0.8.3
+pandas==2.2.2
+numpy==1.26.4
+matplotlib==3.10.7
+matplotlib-inline==0.2.1
+seaborn==0.13.2
+pyarrow==20.0.0
+shap==0.44.1
+lightgbm==4.3.0
