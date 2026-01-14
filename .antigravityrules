@@ -1,3 +1,0 @@
-# Rules for Agent
-- In FAST mode, do NOT generate or execute terminal commands.
-- Just explain or modify code files directly.
