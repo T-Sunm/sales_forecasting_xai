@@ -109,6 +109,12 @@ sales_forecasting_xai/
 │   │   ├── plugins/
 │   │   └── config/
 │   │
+│   ├── config/                 # ← Shared configs
+│   │   ├── connections.yml
+│   │   └── secrets.env.example
+│   │
+│   ├── tests/                  # ← Integration tests
+│   │
 │   └── docker/                 # Containers cho data services
 │       ├── docker-compose.yml
 │       ├── airflow/
