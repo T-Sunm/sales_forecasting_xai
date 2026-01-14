@@ -260,3 +260,154 @@ def plot_sales_distribution(filtered_data):
     ax.legend()
 
     return fig
+
+
+def plot_products_trend_comparison(filtered_data, selected_items):
+    """Generate time series overlay for selected products"""
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    # Color palette matching consistency
+    colors = plt.cm.tab10.colors
+
+    for i, item in enumerate(selected_items):
+        item_data = filtered_data[filtered_data["item_nbr"] == item]
+        sales_by_date = item_data.groupby("date")["units"].sum()
+        
+        # Use simple color cycling
+        color = colors[i % len(colors)]
+        
+        ax.plot(sales_by_date.index, sales_by_date.values, label=f"Product {item}", color=color, linewidth=2)
+
+    ax.set_xlabel("Date")
+    ax.set_ylabel("Units Sold")
+    ax.set_title("Sales Trend Comparison")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    fig.autofmt_xdate()
+
+    return fig
+
+
+def plot_market_share_pie(filtered_data, selected_items):
+    """Generate pie chart showing market share of selected products vs others"""
+    fig, ax = plt.subplots(figsize=(8, 8))
+
+    # Calculate sales for selected items
+    selected_sales = {}
+    total_selected_sales = 0
+    
+    for item in selected_items:
+        sales = filtered_data[filtered_data["item_nbr"] == item]["units"].sum()
+        selected_sales[f"Product {item}"] = sales
+        total_selected_sales += sales
+    
+    total_store_sales = filtered_data["units"].sum()
+    others_sales = total_store_sales - total_selected_sales
+    
+    # Prepare data for pie chart
+    labels = list(selected_sales.keys())
+    sizes = list(selected_sales.values())
+    
+    # Only add "Others" if it's significant and positive
+    if others_sales > 0:
+        labels.append("Others")
+        sizes.append(others_sales)
+
+    # Plot
+    wedges, texts, autotexts = ax.pie(
+        sizes, 
+        labels=labels, 
+        autopct='%1.1f%%',
+        startangle=90,
+        textprops=dict(color="black")
+    )
+    
+    ax.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
+    ax.set_title("Market Share Distribution")
+
+    return fig
+
+
+def plot_growth_rate_comparison(filtered_data, selected_items):
+    """Generate bar chart comparing growth rates (First Half vs Second Half of period)"""
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    # Determine mid-point of the date range
+    if filtered_data.empty:
+        return fig
+        
+    min_date = filtered_data["date"].min()
+    max_date = filtered_data["date"].max()
+    mid_date = min_date + (max_date - min_date) / 2
+    
+    growth_rates = []
+    items = []
+    
+    for item in selected_items:
+        item_data = filtered_data[filtered_data["item_nbr"] == item]
+        
+        first_half = item_data[item_data["date"] <= mid_date]["units"].sum()
+        second_half = item_data[item_data["date"] > mid_date]["units"].sum()
+        
+        if first_half > 0:
+            growth = ((second_half - first_half) / first_half) * 100
+        else:
+            growth = 0 if second_half == 0 else 100 # Handle edge case
+            
+        growth_rates.append(growth)
+        items.append(f"Product {item}")
+        
+    # Plot bars
+    colors = ['green' if g >= 0 else 'red' for g in growth_rates]
+    bars = ax.barh(items, growth_rates, color=colors)
+    
+    # Add value labels
+    ax.bar_label(bars, fmt='%.1f%%', padding=3)
+    
+    ax.axvline(x=0, color='black', linewidth=0.8)
+    ax.set_xlabel("Growth Rate (%)")
+    ax.set_title(f"Growth Rate Comparison ({min_date.date()} - {mid_date.date()} vs {mid_date.date()} - {max_date.date()})")
+    
+    return fig
+
+
+def plot_seasonality_heatmap(filtered_data, selected_items):
+    """Generate heatmap showing sales intensity by Day of Week for selected products"""
+    # Filter for selected items only
+    df = filtered_data[filtered_data["item_nbr"].isin(selected_items)].copy()
+    
+    if df.empty:
+        fig, ax = plt.subplots()
+        return fig
+
+    # Add day of week
+    day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    df['day_of_week'] = df['date'].dt.day_name()
+    df['day_of_week'] = pd.Categorical(df['day_of_week'], categories=day_order, ordered=True)
+    
+    # Group by Product and Day
+    pivot_table = df.pivot_table(
+        values='units', 
+        index='item_nbr', 
+        columns='day_of_week', 
+        aggfunc='mean'
+    )
+    
+    # Plot
+    fig, ax = plt.subplots(figsize=(10, len(selected_items) * 0.8 + 2))
+    
+    sns.heatmap(
+        pivot_table, 
+        cmap="YlGnBu", 
+        annot=True, 
+        fmt=".1f", 
+        linewidths=.5, 
+        ax=ax,
+        cbar_kws={'label': 'Avg Daily Units'}
+    )
+    
+    ax.set_xlabel("Day of Week")
+    ax.set_ylabel("Product ID")
+    ax.set_title("Seasonality Heatmap (Avg Sales by Day)")
+    
+    return fig

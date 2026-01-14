@@ -8,6 +8,10 @@ from components.ui_builder.data_viz import (
     plot_sales_distribution,
     plot_sales_time_series,
     plot_store_comparison,
+    plot_products_trend_comparison,
+    plot_market_share_pie,
+    plot_growth_rate_comparison,
+    plot_seasonality_heatmap,
 )
 
 
@@ -35,6 +39,9 @@ def historical_sales_view(data):
 
     # Display the performance breakdown section
     display_performance_breakdown(filtered_data)
+
+    # Display product performance analysis
+    display_product_performance_analysis(filtered_data)
 
     # Display the sales distribution section
     st.header("Units Distribution")
@@ -334,3 +341,123 @@ def display_performance_breakdown(filtered_data):
         st.dataframe(store_df, use_container_width=True)
         fig = plot_store_comparison(filtered_data, store_identifier)
         st.pyplot(fig)
+
+
+def display_product_performance_analysis(filtered_data):
+    """Display detailed product comparison analysis"""
+    
+    # Only show if there are multiple products available to compare
+    if "item_nbr" not in filtered_data.columns:
+        return
+
+    available_items = sorted(filtered_data["item_nbr"].unique())
+    # Need at least 2 items to compare
+    if len(available_items) < 2:
+        return
+
+    # Only show this section if user is looking at "All Products" or has selected multiple (if logic supports)
+    
+    st.markdown("---")
+    st.header("🎯 Product Performance Analysis")
+    
+    st.markdown("""
+    Select 2-5 products to compare their performance in detail. 
+    Metrics include sales trends, market share, growth rates, and seasonality.
+    """)
+
+    # Smart Default: Select top 3 best-selling products in current view
+    top_sellers = (
+        filtered_data.groupby("item_nbr")["units"]
+        .sum()
+        .sort_values(ascending=False)
+        .head(3)
+        .index.tolist()
+    )
+    # Ensure defaults are valid options and fill up to 3
+    default_products = [x for x in top_sellers if x in available_items]
+    if len(default_products) < 3:
+        remaining = [x for x in available_items if x not in default_products]
+        default_products.extend(remaining[:3 - len(default_products)])
+    
+    selected_products = st.multiselect(
+        "Select Products to Compare",
+        options=available_items,
+        default=default_products,
+        max_selections=5
+    )
+
+    if len(selected_products) < 2:
+        st.info("Please select at least 2 products to compare.")
+        return
+
+    # Filter data for metrics calculation (only selected products)
+    comparison_data = filtered_data[filtered_data["item_nbr"].isin(selected_products)]
+
+    # --- Metrics Section ---
+    st.subheader("Comparison Metrics")
+    
+    # Calculate metrics per product
+    metrics = []
+    
+    # Pre-calculate mid_date for growth rate
+    min_date = filtered_data["date"].min()
+    max_date = filtered_data["date"].max()
+    mid_date = min_date + (max_date - min_date) / 2
+    
+    for item in selected_products:
+        item_data = comparison_data[comparison_data["item_nbr"] == item]
+        total_sales = item_data["units"].sum()
+        avg_daily = item_data.groupby("date")["units"].sum().mean() if not item_data.empty else 0
+        
+        # Growth Rate
+        period1 = item_data[item_data["date"] <= mid_date]["units"].sum()
+        period2 = item_data[item_data["date"] > mid_date]["units"].sum()
+        growth = ((period2 - period1) / period1 * 100) if period1 > 0 else (100 if period2 > 0 else 0)
+        
+        metrics.append({
+            "Product": str(item),
+            "Total Sales": total_sales,
+            "Avg Daily": avg_daily,
+            "Growth Rate": growth
+        })
+    
+    # Display metrics in columns
+    cols = st.columns(len(selected_products))
+    for i, col in enumerate(cols):
+        if i < len(metrics):
+            m = metrics[i]
+            with col:
+                st.metric(
+                    label=f"Product {m['Product']}",
+                    value=f"{m['Total Sales']:,.0f}",
+                    delta=f"{m['Growth Rate']:.1f}%"
+                )
+                st.caption(f"Avg Daily: {m['Avg Daily']:.1f}")
+
+    # --- Visualizations ---
+    
+    # Row 1: Trend Lines + Market Share
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.subheader("Sales Trend Comparison")
+        fig_trend = plot_products_trend_comparison(filtered_data, selected_products)
+        st.pyplot(fig_trend)
+        
+    with col2:
+        st.subheader("Market Share")
+        fig_share = plot_market_share_pie(filtered_data, selected_products)
+        st.pyplot(fig_share)
+
+    # Row 2: Growth Rate + Seasonality
+    col3, col4 = st.columns(2)
+    
+    with col3:
+        st.subheader("Growth Rate Trend")
+        fig_growth = plot_growth_rate_comparison(filtered_data, selected_products)
+        st.pyplot(fig_growth)
+        
+    with col4:
+        st.subheader("Seasonality Patterns")
+        fig_season = plot_seasonality_heatmap(filtered_data, selected_products)
+        st.pyplot(fig_season)
