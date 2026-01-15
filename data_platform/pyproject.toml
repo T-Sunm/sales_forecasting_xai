@@ -1,0 +1,11 @@
+[project]
+name = "data-platform"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas>=2.3.3",
+    "psycopg2-binary>=2.9.11",
+    "sqlalchemy>=2.0.45",
+]
