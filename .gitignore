@@ -52,7 +52,6 @@ data/*.xlsx
 
 # Output and figures
 check_data/
-models/
 *.log
 
 # Streamlit cache
@@ -81,7 +80,7 @@ shared/data/**/*.feather
 shared/data/**/*.parquet
 shared/models/*.pkl
 shared/logs/*.log
-
+shared/models
 # UV package manager
 uv.lock
 .venv/
