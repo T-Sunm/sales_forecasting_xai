@@ -1,192 +1,187 @@
-# Data Platform (dbt + PostgreSQL)
+# Data Platform (Lakehouse Architecture)
 
-This project manages the data transformation pipeline using **dbt** (data build tool) and **PostgreSQL**.
+This project implements a modern data platform using **Spark + MinIO (Data Lake)** and **dbt + PostgreSQL (Data Warehouse)**.
 
-## 📋 Prerequisites
-
-- Python (3.10+)
-- [uv](https://docs.astral.sh/uv/) (Python package manager)
-- PostgreSQL (Running locally on port 5432)
-
-## 🚀 Setup Guide
-
-### 1. Configure dbt Profile
-
-Create or update your global dbt profile to connect to your local PostgreSQL instance.
-
-**Edit Profile:**
-
-```powershell
-# Windows
-notepad $env:USERPROFILE\.dbt\profiles.yml
-
-# Linux/macOS
-nano ~/.dbt/profiles.yml
-```
-
-**Configuration:**
-
-```yaml
-sales_forecasting:
-  target: dev
-  outputs:
-    dev:
-      type: postgres
-      host: localhost
-      user: postgres
-      password: changeme  # Update with your local password
-      port: 5432
-      dbname: postgres
-      schema: public
-      threads: 4
-```
-
-### 2. Install Dependencies
-
-Navigate to the `data_platform` directory and sync dependencies using `uv`.
-
-```powershell
-cd data_platform
-uv sync
-```
-
-### 3. Load Raw Data (ETL)
-
-We use a Python script to load raw CSV data into the PostgreSQL `raw` schema.
-
-- **Source Data:** `shared/data/data_raw/*.csv`
-- **Destination:** PostgreSQL `raw` schema (`raw_sales`, `raw_weather`, `raw_key`)
-
-Run the loader script:
-
-```powershell
-uv run python postgres/scripts/load_raw_data.py
-```
-
-**Expected Output:**
+## 🏗️ Architecture Overview
 
 ```
-✅ Schema 'raw' created/verified
-✅ Loaded train.csv -> raw.raw_sales
-✅ Loaded weather.csv -> raw.raw_weather
-✅ Loaded key.csv -> raw.raw_key
-🎉 All data loaded successfully!
+Raw CSV → MinIO (Bronze) → Spark Staging → MinIO (Silver) → Spark Intermediate → MinIO (Gold) → PostgreSQL → dbt Marts
 ```
 
-### 4. Verify Connection
+### Components
 
-Check if dbt can connect to your PostgreSQL database.
-
-```powershell
-cd dbt/sales_forecasting
-uv run dbt debug
-```
-
-Look for: `All checks passed!`
-
-## 🛠️ Development Workflow
-
-### Running Models
-
-Transform raw data into analytics-ready models:
-
-```powershell
-# Run all models
-uv run dbt run
-
-# Run specific models (e.g., only staging)
-uv run dbt run --select tag:staging
-```
-
-### 5. Generate Base Models (Optional)
-
-Instead of writing YAML files manually, use `codegen` to automatically generate the initial `sources.yml` from your database schema.
-
-**1. Install dbt packages:**
-Ensure `packages.yml` exists and includes `dbt-labs/codegen`, then run:
-
-```powershell
-```powershell
-uv run dbt deps
-```
-
-**2. Create Model Directories:**
-Make sure the folder structure exists:
-
-```powershell
-# PowerShell
-# Note: In PowerShell, you can create multiple directories like this:
-mkdir models/staging, models/intermediate, models/marts
-```
-
-**3. Generate Source YAML:**
-Run this command to inspect the raw schema and output the YAML configuration:
-
-```powershell
-# Print YAML to terminal (Copy & Paste the output to models/staging/sources.yml)
-uv run dbt run-operation generate_source --args '{"schema_name": "raw", "database_name": "postgres"}'
-```
-
-**Result (`models/staging/sources.yml`):**
-
-```yaml
-version: 2
-
-sources:
-  - name: raw
-    database: postgres
-    schema: raw
-    tables:
-      - name: raw_key
-      - name: raw_sales
-      - name: raw_weather
-```
-
-### 6. Configure Project Structure (Recommended)
-
-Clean up the default dbt examples and configure the materialization strategies for your data layers.
-
-**1. Remove Example Models:**
-Delete the default `example` folder to keep the project clean.
-
-```powershell
-Remove-Item -Recurse -Force models/example
-```
-
-**2. Configure Materialization:**
-Update `dbt_project.yml` to define how models in each layer should be built (View vs Table).
-
-```yaml
-models:
-  sales_forecasting:
-    # staging & intermediate -> Views (Faster, less storage)
-    staging:
-      +materialized: view
-    intermediate:
-      +materialized: view
-      
-    # marts -> Tables (Pre-computed for performance)
-    marts:
-      +materialized: table
-```
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| **Data Lake** | MinIO | Object storage for Bronze/Silver/Gold layers |
+| **Processing** | Spark | Distributed data transformation |
+| **Data Warehouse** | PostgreSQL | Serving layer for analytics |
+| **Transformation** | dbt | Star schema modeling |
+| **Orchestration** | Airflow | Workflow scheduling |
 
 ## 📂 Project Structure
 
 ```text
 data_platform/
+├── infra/                              # Infrastructure
+│   ├── postgres/
+│   │   ├── docker-compose.yml
+│   │   └── scripts/
+│   │       └── load_from_minio.py      # Load Gold → PostgreSQL
+│   └── spark_minio/
+│       ├── docker-compose.yml
+│       ├── Dockerfile
+│       └── scripts/
+│           ├── load_raw_data.py        # Raw CSV → Bronze
+│           └── load_holidays.py        # Holidays → Bronze
+│
+├── datalake/                           # Data Lake metadata
+│   ├── schemas/                        # Schema definitions
+│   └── docs/                           # Data dictionary
+│
+├── spark/                              # Spark ETL jobs
+│   ├── src/                            # Reusable libraries
+│   ├── jobs/
+│   │   ├── staging/                    # Bronze → Silver
+│   │   └── intermediate/               # Silver → Gold
+│   └── configs/                        # Environment configs
+│
+├── pipelines/                          # Orchestration
+│   └── airflow/
+│       └── dags/
+│
 ├── dbt/
-│   └── sales_forecasting/    # Main dbt project
-│       ├── models/           # SQL transformations
-│       ├── seeds/            # Static reference data
-│       └── dbt_project.yml   # Project configuration
-├── postgres/
-│   └── scripts/
-│       └── load_raw_data.py  # Script to load CSVs to Postgres
-└── pyproject.toml            # Python dependencies (dbt-core, psycopg2, etc.)
+│   ├── sales_forecasting/              # [LEGACY] Pure dbt implementation
+│   └── sales_forecasting_warehouse/    # [NEW] Lakehouse + dbt
+│       ├── models/
+│       │   ├── sources/                # Sources from Gold layer
+│       │   └── marts/
+│       │       └── star_schema/        # Fact & Dimension tables
+│       ├── seeds/
+│       ├── tests/
+│       └── macros/
+│
+├── .python-version
+├── pyproject.toml
+├── README.md
+└── uv.lock
 ```
+
+## 🚀 Quick Start
+
+### 1. Start Infrastructure
+
+```powershell
+# Start PostgreSQL
+cd infra/postgres
+docker-compose up -d
+
+# Start Spark + MinIO
+cd infra/spark_minio
+docker-compose up -d
+```
+
+### 2. Load Raw Data to MinIO
+
+```powershell
+# Load raw CSV files to Bronze layer
+uv run python infra/spark_minio/scripts/load_raw_data.py
+
+# Load holidays data
+uv run python infra/spark_minio/scripts/load_holidays.py
+```
+
+### 3. Run Spark Jobs
+
+```powershell
+# Staging: Bronze → Silver
+spark-submit spark/jobs/staging/sales_staging.py
+
+# Intermediate: Silver → Gold
+spark-submit spark/jobs/intermediate/sales_features.py
+```
+
+### 4. Load to PostgreSQL
+
+```powershell
+# Load Gold data to PostgreSQL
+uv run python infra/postgres/scripts/load_from_minio.py
+```
+
+### 5. Run dbt
+
+```powershell
+cd dbt/sales_forecasting_warehouse
+uv run dbt run
+```
+
+## 📊 Data Layers
+
+### Bronze Layer (Raw)
+- **Storage**: MinIO `bronze/` bucket
+- **Format**: Parquet
+- **Content**: Raw data from CSV files, no transformations
+- **Source**: `infra/spark_minio/scripts/load_raw_data.py`
+
+### Silver Layer (Staged)
+- **Storage**: MinIO `silver/` bucket
+- **Format**: Parquet
+- **Content**: Cleaned and staged data
+- **Transformations**: 
+  - Column renaming
+  - Type casting
+  - Basic data cleaning
+  - Missing value handling
+- **Source**: `spark/jobs/staging/`
+
+### Gold Layer (Features)
+- **Storage**: MinIO `gold/` bucket
+- **Format**: Parquet
+- **Content**: Feature-engineered data ready for ML/Analytics
+- **Transformations**:
+  - Lag features
+  - Rolling window aggregations
+  - EWMA calculations
+  - Store/Item context features
+  - Date features
+  - Weather integration
+- **Source**: `spark/jobs/intermediate/`
+
+### Marts Layer (Star Schema)
+- **Storage**: PostgreSQL
+- **Format**: Tables
+- **Content**: Dimensional model for BI tools
+- **Transformations**: Fact & Dimension tables
+- **Source**: `dbt/sales_forecasting_warehouse/models/marts/`
+
+## 🔄 Migration Notes
+
+### Legacy Implementation (dbt-only)
+The original implementation in `dbt/sales_forecasting/` used pure dbt for all transformations:
+- Staging layer: SQL-based cleaning
+- Intermediate layer: SQL window functions for features
+- Marts layer: Star schema
+
+**Limitations**:
+- Limited scalability with large datasets
+- Complex window functions in SQL
+- All processing in PostgreSQL
+
+### New Implementation (Lakehouse)
+The new implementation in `dbt/sales_forecasting_warehouse/` separates concerns:
+- **Spark**: Heavy-lifting transformations (staging + intermediate)
+- **dbt**: Final star schema modeling
+- **MinIO**: Scalable object storage
+- **PostgreSQL**: Serving layer only
+
+**Benefits**:
+- Horizontally scalable with Spark
+- Better separation of concerns
+- Reusable Spark libraries
+- Easier to test and maintain
 
 ## 📚 Resources
 
 - [dbt Documentation](https://docs.getdbt.com/)
-- [dbt Discourse](https://discourse.getdbt.com/)
-- [dbt Slack](https://community.getdbt.com/)
+- [Apache Spark Documentation](https://spark.apache.org/docs/latest/)
+- [MinIO Documentation](https://min.io/docs/)
+- [Airflow Documentation](https://airflow.apache.org/docs/)
