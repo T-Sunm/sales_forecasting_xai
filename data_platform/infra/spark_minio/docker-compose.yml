@@ -13,7 +13,9 @@ services:
     environment:
       - SPARK_PUBLIC_DNS=localhost
     volumes:
+      - ./spark_conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
       - ./data:/opt/spark/data
+      - ../../spark/jobs:/opt/spark/jobs
     networks:
       - data_network
     healthcheck:
@@ -39,7 +41,9 @@ services:
       - SPARK_WORKER_MEMORY=1G
       - SPARK_PUBLIC_DNS=localhost
     volumes:
+      - ./spark_conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
       - ./data:/opt/spark/data
+      - ../../spark/jobs:/opt/spark/jobs
     networks:
       - data_network
   minio:
