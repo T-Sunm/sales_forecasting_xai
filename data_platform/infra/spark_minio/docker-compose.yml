@@ -16,6 +16,7 @@ services:
       - ./spark_conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
       - ./data:/opt/spark/data
       - ../../spark/jobs:/opt/spark/jobs
+      - ../../spark/configs:/opt/spark/configs
     networks:
       - data_network
     healthcheck:

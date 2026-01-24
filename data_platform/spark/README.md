@@ -1,43 +1,100 @@
 # Spark ETL Jobs
 
-Thư mục này chứa các Spark jobs để transform data trong Data Lake.
+This directory contains PySpark jobs for data transformation pipeline.
 
-## Cấu trúc
-
-- `src/`: Reusable libraries và utility functions
-- `jobs/`: Entry points cho các Spark jobs
-  - `staging/`: Transform Bronze → Silver (cleaning, renaming, type casting)
-  - `intermediate/`: Transform Silver → Gold (feature engineering)
-- `configs/`: Configuration files cho các môi trường (dev/prod)
-
-## Data Flow
+## Structure
 
 ```
-Bronze (MinIO) → Spark Staging → Silver (MinIO) → Spark Intermediate → Gold (MinIO) → PostgreSQL
+spark/
+├── src/                  # Reusable utilities and helper functions
+├── jobs/
+│   ├── staging/         # Bronze → Silver transformations
+│   └── intermediate/    # Silver → Gold feature engineering
+└── configs/             # Configuration files
 ```
-
-## Staging Jobs
-Tương đương với staging layer trong dbt cũ:
-- Rename columns
-- Cast data types
-- Basic data cleaning
-- Handle missing values
-
-## Intermediate Jobs
-Tương đương với intermediate layer trong dbt cũ:
-- Lag features
-- Rolling window aggregations
-- EWMA calculations
-- Store/Item context features
-- Date features
-- Weather data integration
 
 ## Running Jobs
 
-```bash
-# Example: Run staging job
-spark-submit spark/jobs/staging/sales_staging.py
+### Local Development
 
-# Example: Run intermediate job
-spark-submit spark/jobs/intermediate/sales_features.py
+```bash
+# Set Python path
+export PYTHONPATH="${PYTHONPATH}:$(pwd)/spark"
+
+# Run staging job
+spark-submit \
+  --master local[*] \
+  spark/jobs/staging/staging_transform.py
+
+# Run intermediate jobs
+spark-submit \
+  --master local[*] \
+  spark/jobs/intermediate/sales_features_pipeline.py
+
+spark-submit \
+  --master local[*] \
+  spark/jobs/intermediate/weather_features_pipeline.py
+```
+
+### With Docker/Spark Cluster
+
+```bash
+# Submit to Spark cluster
+spark-submit \
+  --master spark://spark-master:7077 \
+  --deploy-mode client \
+  spark/jobs/intermediate/sales_features_pipeline.py
+```
+
+## Configuration
+
+All paths and parameters are centralized in `configs/config.py`:
+- MinIO/S3 credentials
+- Bucket names and paths
+- Feature engineering parameters
+- Spark configurations
+
+## Utilities
+
+The `src/utils.py` module provides reusable functions:
+- `add_lag_features_generic()` - Generic lag feature creation
+- `add_rolling_features_generic()` - Rolling window statistics
+- `impute_numeric_columns()` - Missing value imputation
+- `one_hot_encode_column()` - One-hot encoding
+- `filter_by_total_threshold()` - Partition-based filtering
+
+## Migration from dbt
+
+This Spark implementation replaces the staging and intermediate layers from the legacy dbt project:
+
+| Layer | Old (dbt) | New (Spark) |
+|-------|-----------|-------------|
+| Staging | `dbt/sales_forecasting/models/staging/` | `spark/jobs/staging/` |
+| Intermediate | `dbt/sales_forecasting/models/intermediate/` | `spark/jobs/intermediate/` |
+| Marts | `dbt/sales_forecasting/models/marts/` | `dbt/sales_forecasting_warehouse/models/marts/` |
+
+## Development
+
+### Adding New Jobs
+
+1. Create new file in appropriate folder (`staging/` or `intermediate/`)
+2. Import from `configs.config` for configuration
+3. Use utilities from `src/utils.py` when possible
+4. Follow naming convention: `{entity}_{transformation}_pipeline.py`
+
+### Testing
+
+```python
+# Example unit test structure
+import pytest
+from pyspark.sql import SparkSession
+from jobs.intermediate.sales_features_pipeline import filter_active_sales
+
+@pytest.fixture
+def spark():
+    return SparkSession.builder.master("local[1]").getOrCreate()
+
+def test_filter_active_sales(spark):
+    # Test implementation
+    pass
 ```
