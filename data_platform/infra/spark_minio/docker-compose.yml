@@ -10,8 +10,10 @@ services:
     ports:
       - "7077:7077"
       - "8081:8080"
+      - "4040:4040"
     environment:
       - SPARK_PUBLIC_DNS=localhost
+      - S3_ENDPOINT=http://minio:9000
     volumes:
       - ./spark_conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
       - ./data:/opt/spark/data
@@ -41,6 +43,7 @@ services:
       - SPARK_WORKER_CORES=1
       - SPARK_WORKER_MEMORY=1G
       - SPARK_PUBLIC_DNS=localhost
+      - S3_ENDPOINT=http://minio:9000
     volumes:
       - ./spark_conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
       - ./data:/opt/spark/data

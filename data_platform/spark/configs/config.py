@@ -1,12 +1,8 @@
-"""
-Configuration for Spark jobs
-
-This module contains configuration settings for Spark ETL pipelines.
-"""
+import os
 
 # MinIO/S3 Configuration
 BUCKET_NAME = "datalake"
-S3_ENDPOINT = "http://localhost:9000"  # MinIO endpoint
+S3_ENDPOINT = os.environ.get("S3_ENDPOINT", "http://localhost:9000")  # MinIO endpoint
 S3_ACCESS_KEY = "minioadmin"
 S3_SECRET_KEY = "minioadmin"
 
