@@ -1,0 +1,14 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    tables:
+      - name: stg_key
+
+  - name: intermediate
+    schema: intermediate
+    tables:
+      - name: int_active_sales
+      - name: int_date_features
+      - name: weather_features
