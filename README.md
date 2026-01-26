@@ -148,6 +148,19 @@ cd frontend
 uv run streamlit run src/app.py
 ```
 
+**3. Configure Database Connection (Optional for Visualizations)**
+To enable database-backed visualizations, create `.streamlit/secrets.toml` in the `frontend` directory:
+```toml
+[connections.postgresql]
+dialect = "postgresql"
+host = "localhost"
+port = 5432
+database = "sales_forecasting"
+username = "postgres"
+password = "changeme"
+```
+
+
 ## Installation
 
 1. **Clone the Repository**
