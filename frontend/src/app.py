@@ -52,7 +52,7 @@ def check_backend_connection():
 
 
 def main():
-    # Check backend connection for prediction pages
+    # Sidebar title
     st.sidebar.title("Sales Forecasting XAI")
     
     page = st.sidebar.selectbox(
@@ -64,25 +64,24 @@ def main():
         ]
     )
     
-    # Only check backend for prediction-related pages
-    if page in ["Sales Prediction", "XAI Explanation"]:
-        check_backend_connection()
-    
-    # Load local data for visualization
-    data = load_data()
-    feature_stats = load_feature_stats()
-    
-    # Display page based on selection
+    # Page logic
     if page == "Historical Sales Analysis":
-        historical_sales_view(data)
+        # Direct SQL mode - no heavy CSV loading needed
+        historical_sales_view()
         
     elif page == "Sales Prediction":
+        check_backend_connection()
+        # Load data only when needed
+        data = load_data()
+        feature_stats = load_feature_stats()
         feature_engineered_data = load_feature_engineered_data()
-        # Pass API client instead of model dict
         api = get_api_client()
         sales_prediction_view(data, api, feature_stats, feature_engineered_data)
         
     else:  # XAI Explanation
+        check_backend_connection()
+        # Load data only when needed
+        data = load_data()
         # XAI now uses Backend API for all SHAP computations
         xai_explanation_view(data, None, None)
 
