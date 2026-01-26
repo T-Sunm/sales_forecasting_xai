@@ -1,4 +1,7 @@
-{{ config(materialized='table') }}
+{{ config(
+  materialized='table',
+  post_hook="alter table {{ this }} add primary key (date)"
+) }}
 
 with bounds as (
     select

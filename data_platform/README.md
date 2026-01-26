@@ -70,13 +70,15 @@ data_platform/
 
 ### 1. Start Infrastructure
 
+> **Note:** Spark + MinIO must be started first because PostgreSQL depends on the shared network `spark_minio_data_network` created by the Spark/MinIO stack.
+
 ```powershell
-# Start PostgreSQL
-cd infra/postgres
+# 1. Start Spark + MinIO
+cd infra/spark_minio
 docker-compose up -d
 
-# Start Spark + MinIO
-cd infra/spark_minio
+# 2. Start PostgreSQL
+cd infra/postgres
 docker-compose up -d
 ```
 
