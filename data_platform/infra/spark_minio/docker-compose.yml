@@ -67,4 +67,5 @@ services:
       - data_network
 networks:
   data_network:
-    driver: bridge
+    external: true
+    name: data_platform_net

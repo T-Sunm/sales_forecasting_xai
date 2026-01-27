@@ -14,7 +14,7 @@ services:
       - "5432:5432"
     networks:
       - postgres
-      - spark_net
+      - data_network
     restart: unless-stopped
   
   pgadmin:
@@ -31,15 +31,15 @@ services:
       - "${PGADMIN_PORT:-5050}:80"
     networks:
       - postgres
-      - spark_net
+      - data_network
     restart: unless-stopped
 
 networks:
   postgres:
     driver: bridge
-  spark_net: # use same  network with spark and minio from data_platform\infra\spark_minio\docker-compose.yml
+  data_network: # use same network with spark and minio
     external: true
-    name: spark_minio_data_network
+    name: data_platform_net
 
 volumes:
     postgres:

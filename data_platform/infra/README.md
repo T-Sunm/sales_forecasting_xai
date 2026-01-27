@@ -27,4 +27,23 @@ docker-compose up -d
 # Start Spark + MinIO
 cd infra/spark_minio
 docker-compose up -d
+
+# Start Airflow
+cd infra/airflow
+docker-compose up -d
 ```
+
+## Airflow
+
+Orchestrator cho toàn bộ pipeline.
+
+### Setup `.env` (bắt buộc)
+
+Tạo file `infra/airflow/.env` với nội dung:
+
+```env
+AIRFLOW_UID=50000
+AIRFLOW__API_AUTH__JWT_SECRET=1
+```
+
+> **Note**: `AIRFLOW__API_AUTH__JWT_SECRET` bắt buộc cho Airflow 3.x. Trong production, dùng random string thay vì `1`.

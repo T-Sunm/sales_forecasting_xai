@@ -1,0 +1,6 @@
+# Cosmos pinned explicitly (not from Airflow ecosystem)
+astronomer-cosmos==1.12.1
+
+# No version pinning needed: Dockerfile uses --constraint to lock versions
+apache-airflow-providers-apache-spark
+psycopg2-binary

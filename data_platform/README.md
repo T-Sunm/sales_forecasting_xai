@@ -68,21 +68,33 @@ data_platform/
 
 ## 🚀 Quick Start
 
-### 1. Start Infrastructure
+### 1. Setup Shared Network
 
-> **Note:** Spark + MinIO must be started first because PostgreSQL depends on the shared network `spark_minio_data_network` created by the Spark/MinIO stack.
+The infrastructure components communicate via a shared Docker network named `data_platform_net`. You must create this network once before starting the stack:
+
+```powershell
+docker network create data_platform_net
+```
+
+### 2. Start Infrastructure
+
+With the shared network created, you can now start the components in any order.
 
 ```powershell
 # 1. Start Spark + MinIO
 cd infra/spark_minio
 docker-compose up -d
 
-# 2. Start PostgreSQL
+# 2. Start PostgreSQL (Data Warehouse)
 cd infra/postgres
+docker-compose up -d
+
+# 3. Start Airflow (Orchestrator)
+cd infra/airflow
 docker-compose up -d
 ```
 
-### 2. Load Raw Data to MinIO
+### 3. Load Raw Data to MinIO
 
 ```powershell
 # Load raw CSV files to Bronze layer
@@ -109,7 +121,7 @@ spark-submit spark/jobs/intermediate/sales_features.py
 uv run python infra/postgres/scripts/load_from_minio.py
 ```
 
-### 5. Run dbt
+### 6. Run dbt (Manual)
 
 ```powershell
 cd dbt/sales_forecasting_warehouse
