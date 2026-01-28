@@ -44,14 +44,23 @@
 # === END OLD CODE ===
 
 
+import sys
+from pathlib import Path
 from pyspark.sql import SparkSession
+
+sys.path.append(str(Path(__file__).parent.parent.parent / "configs"))
+from config import SPARK_CONFIGS
 
 BUCKET = "datalake"
 RAW_BASE = f"s3a://{BUCKET}/staging/raw/"
 PARQUET_BASE = f"s3a://{BUCKET}/staging/parquet/"
 CSV_FILES = ["train.csv", "key.csv", "weather.csv", "test.csv", "holidays.csv", "blackfriday.csv"]
 
-spark = SparkSession.builder.appName("walmart-staging-ingest").getOrCreate()
+builder = SparkSession.builder.appName("walmart-staging-ingest")
+for key, val in SPARK_CONFIGS.items():
+    builder = builder.config(key, val)
+
+spark = builder.getOrCreate()
 spark.sparkContext.setLogLevel("WARN")
 
 

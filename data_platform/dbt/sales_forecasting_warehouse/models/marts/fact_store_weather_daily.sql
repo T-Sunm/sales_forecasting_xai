@@ -7,22 +7,14 @@
   ]
 ) }}
 
-with store_station as (
-  select store_id, station_id
-  from {{ ref('dim_store') }}
-),
-
-weather_station_daily as (
-  select
+with weather_base as (
+  select distinct
     date,
     station_id,
-
-    -- numeric measures
-    tmax, tmin, tavg, depart, dewpoint, wetbulb, heat, cool,
-    sunrise, sunset, snowfall, preciptotal, stnpressure, sealevel,
+    tmax, tmin, tavg,
+    dewpoint, wetbulb,
+    preciptotal, snowfall,
     resultspeed, resultdir, avgspeed,
-
-    -- flags (to lookup junk dim)
     coalesce(is_ra, 0) as is_ra,
     coalesce(is_sn, 0) as is_sn,
     coalesce(is_fg, 0) as is_fg,
@@ -38,15 +30,14 @@ weather_station_daily as (
     coalesce(is_bc, 0) as is_bc,
     coalesce(is_bl, 0) as is_bl,
     coalesce(is_vc, 0) as is_vc
-
-  from {{ source('intermediate', 'weather_features') }}
+  from {{ source('mart', 'sales_forecast') }}
 ),
 
-weather_with_profile as (
+with_profile as (
   select
     w.*,
     p.weather_profile_key
-  from weather_station_daily w
+  from weather_base w
   left join {{ ref('dim_weather_profile') }} p
     on  w.is_ra = p.is_ra
     and w.is_sn = p.is_sn
@@ -68,21 +59,16 @@ weather_with_profile as (
 final as (
   select
     w.date,
-    ss.store_id,
-    ss.station_id,
-
-    -- FK to junk dim
+    s.store_id,
+    w.station_id,
     w.weather_profile_key,
-
-    -- numeric measures
-    w.tmax, w.tmin, w.tavg, w.depart, w.dewpoint, w.wetbulb, w.heat, w.cool,
-    w.sunrise, w.sunset, w.snowfall, w.preciptotal, w.stnpressure, w.sealevel,
+    w.tmax, w.tmin, w.tavg,
+    w.dewpoint, w.wetbulb,
+    w.preciptotal, w.snowfall,
     w.resultspeed, w.resultdir, w.avgspeed
-
-  from weather_with_profile w
-  join store_station ss
-    on w.station_id = ss.station_id
+  from with_profile w
+  join {{ ref('dim_store') }} s
+    on w.station_id = s.station_id
 )
 
-select *
-from final
+select * from final

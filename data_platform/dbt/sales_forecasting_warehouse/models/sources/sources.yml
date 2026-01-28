@@ -12,3 +12,8 @@ sources:
       - name: int_active_sales
       - name: int_date_features
       - name: weather_features
+
+  - name: mart
+    schema: marts
+    tables:
+      - name: sales_forecast

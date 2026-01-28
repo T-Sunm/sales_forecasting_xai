@@ -4,12 +4,16 @@ import sys
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).parent.parent.parent / "configs"))
-from config import STAGING_PATH
+from config import STAGING_PATH, SPARK_CONFIGS
 
 IN_BASE = STAGING_PATH + "parquet/"
 OUT_BASE = STAGING_PATH
 
-spark = SparkSession.builder.appName("walmart-staging-transform").getOrCreate()
+builder = SparkSession.builder.appName("walmart-staging-transform")
+for key, val in SPARK_CONFIGS.items():
+    builder = builder.config(key, val)
+
+spark = builder.getOrCreate()
 spark.sparkContext.setLogLevel("WARN")
 
 

@@ -69,17 +69,26 @@ x-airflow-common:
     # See https://airflow.apache.org/docs/apache-airflow/stable/administration-and-deployment/logging-monitoring/check-health.html#scheduler-health-check-server
     # yamllint enable rule:line-length
     AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
+    S3_ENDPOINT: 'http://minio:9000'
     # WARNING: Use _PIP_ADDITIONAL_REQUIREMENTS option ONLY for a quick checks
     # for other purpose (development, test and especially production usage) build/extend Airflow image.
     _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
     # The following line can be used to set a custom config file, stored in the local config folder
     AIRFLOW_CONFIG: '/opt/airflow/config/airflow.cfg'
+    AIRFLOW_CONN_POSTGRES_DW: 'postgresql://postgres:changeme@postgres_container:5432/sales_forecasting'
+    PG_HOST: 'postgres_container'
+    PG_USER: 'postgres'
+    PG_PASS: 'changeme'
+    PG_DB: 'sales_forecasting'
   volumes:
     - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
     - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
     - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
     - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
     - ${AIRFLOW_PROJ_DIR:-.}/../../dbt:/opt/airflow/dags/dbt
+    - ${AIRFLOW_PROJ_DIR:-.}/../../spark/jobs:/opt/spark/jobs
+    - ${AIRFLOW_PROJ_DIR:-.}/../../spark/configs:/opt/spark/configs
+    - ${AIRFLOW_PROJ_DIR:-.}/../spark_minio/spark_conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
   user: "${AIRFLOW_UID:-50000}:0"
   networks:
     - default

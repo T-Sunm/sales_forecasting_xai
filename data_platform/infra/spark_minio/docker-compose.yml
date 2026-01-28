@@ -41,7 +41,7 @@ services:
       - "8082:8081"
     environment:
       - SPARK_WORKER_CORES=1
-      - SPARK_WORKER_MEMORY=1G
+      - SPARK_WORKER_MEMORY=4G
       - SPARK_PUBLIC_DNS=localhost
       - S3_ENDPOINT=http://minio:9000
     volumes:

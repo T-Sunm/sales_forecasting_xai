@@ -14,14 +14,15 @@ logger = logging.getLogger(__name__)
 # import config
 sys.path.append(str(Path(__file__).parent.parent / "configs"))
 try:
-    from config import STAGING_PATH, INTER_PATH, SPARK_CONFIGS
+    from config import STAGING_PATH, INTER_PATH, MART_PATH, SPARK_CONFIGS
 except ImportError:
     sys.path.append("/opt/spark/configs")
     try:
-        from config import STAGING_PATH, INTER_PATH, SPARK_CONFIGS
+        from config import STAGING_PATH, INTER_PATH, MART_PATH, SPARK_CONFIGS
     except ImportError:
         STAGING_PATH = "s3a://datalake/staging/"
         INTER_PATH = "s3a://datalake/intermediate/"
+        MART_PATH = "s3a://datalake/mart/"
         SPARK_CONFIGS = {}
 
 PG_HOST = os.environ.get("PG_HOST", "postgres")
@@ -46,6 +47,7 @@ TABLES = [
     (INTER_PATH + "int_sales_with_ewma", "intermediate.int_sales_with_ewma"),
     (INTER_PATH + "int_active_sales", "intermediate.int_active_sales"),
     (INTER_PATH + "weather_features", "intermediate.weather_features"),
+    (MART_PATH + "sales_forecast", "marts.sales_forecast"),
 ]
 
 def main():

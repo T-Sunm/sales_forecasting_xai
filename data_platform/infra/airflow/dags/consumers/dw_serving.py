@@ -1,56 +1,58 @@
 from airflow import DAG
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
+from cosmos import DbtTaskGroup, ProjectConfig, ProfileConfig, ExecutionConfig, RenderConfig
+from cosmos.constants import TestBehavior
+from cosmos.profiles import PostgresUserPasswordProfileMapping
 from pendulum import datetime
-from cosmos import DbtDag, ProjectConfig, ProfileConfig, ExecutionConfig
-import sys
-import os
+import sys, os
 
-# Ensure dags folder is in path to import datasets
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from datasets import DS_FEATURE_STORE
+from datasets import DS_MART_FEATURES
 
-DBT_PROJECT_PATH = "/opt/airflow/dags/dbt/sales_forecasting"
+DBT_PROJECT_PATH = "/opt/airflow/dags/dbt/sales_forecasting_warehouse"
 DBT_EXECUTABLE_PATH = "/opt/airflow/dbt_venv/bin/dbt"
+
 
 with DAG(
     dag_id="consumer_dw_serving",
     start_date=datetime(2024, 1, 1),
-    schedule=[DS_FEATURE_STORE],
+    schedule=[DS_MART_FEATURES],
     catchup=False,
-    tags=["layer:dw_serving"],
+    tags=["layer:serving"],
 ) as dag:
 
-    # 1. Load Feature Store (Parquet) -> Postgres Staging
     load_to_dw = SparkSubmitOperator(
         task_id="spark_load_to_postgres",
         application="/opt/spark/jobs/load_to_postgres.py",
         conn_id="spark_default",
-        application_args=[
-            "--source", "s3a://datalake/feature_store/sales_forecast",
-            "--target", "raw.stg_sales_forecast",
-            "--mode", "overwrite"
-        ],
+        properties_file="/opt/spark/conf/spark-defaults.conf",
+        jars="/opt/airflow/jars/hadoop-aws-3.3.4.jar,/opt/airflow/jars/aws-java-sdk-bundle-1.12.262.jar,/opt/airflow/jars/postgresql-42.7.0.jar",
         conf={
             "spark.submit.deployMode": "client",
-        }
+            "spark.driver.host": "airflow-worker",
+            "spark.driver.bindAddress": "0.0.0.0",
+        },
+        env_vars={
+            "PG_HOST": "postgres_container",
+            "PG_USER": "postgres",
+            "PG_PASS": "changeme",
+            "PG_DB": "sales_forecasting",
+        },
     )
 
-    # 2. dbt build (via Cosmos)
-    from cosmos import DbtTaskGroup, ProjectConfig, ProfileConfig, ExecutionConfig
-    from cosmos.profiles import PostgresUserPasswordProfileMapping
-
     dbt_marts = DbtTaskGroup(
-        group_id="dbt_marts_processing",
+        group_id="dbt_marts",
         project_config=ProjectConfig(DBT_PROJECT_PATH),
         profile_config=ProfileConfig(
             profile_name="sales_forecasting",
             target_name="dev",
             profile_mapping=PostgresUserPasswordProfileMapping(
-                conn_id="postgres_dw", # Airflow Connection ID for the Data Warehouse
+                conn_id="postgres_dw",
                 profile_args={"schema": "marts"},
             ),
         ),
         execution_config=ExecutionConfig(dbt_executable_path=DBT_EXECUTABLE_PATH),
+        render_config=RenderConfig(test_behavior=TestBehavior.AFTER_ALL),
     )
 
     load_to_dw >> dbt_marts

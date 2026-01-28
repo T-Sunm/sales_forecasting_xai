@@ -2,62 +2,61 @@ from airflow import DAG
 from airflow.decorators import task
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 from pendulum import datetime
-import sys
-import os
+import sys, os
 
-# Ensure dags folder is in path to import datasets
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from datasets import DS_CURATED_SALES, DS_CURATED_WEATHER, DS_FEATURE_STORE
+from datasets import (
+    DS_INTER_SALES, DS_INTER_WEATHER, DS_MART_FEATURES,
+    URI_INTER_SALES, URI_MART_FEATURES
+)
 
-def attach_features_metadata(context, result=None):
-    """
-    Attach metadata to the Feature Store dataset event.
-    """
-    context["outlet_events"][DS_FEATURE_STORE].extra = {
-        "run_date": context["params"].get("run_date", context["ds"]),
-        "source": "spark_feature_engineering"
+
+def attach_metadata(context, result=None):
+    logical_date = context.get("logical_date")
+    run_date = context.get("ds") or (logical_date.to_date_string() if logical_date else None)
+    
+    context["outlet_events"][DS_MART_FEATURES].extra = {
+        "run_date": context["params"].get("run_date", run_date),
+        "source": "spark_join_features"
     }
 
+
 @task
-def resolve_upstream_run_date(**context):
-    """
-    Resolve run_date from triggering dataset events (Airflow 2.10+).
-    Key must be Dataset object, not URI string.
-    """
-    events = context.get("triggering_dataset_events", {})
-    # Use Dataset object as key, not URI string
-    sales_events = events.get(DS_CURATED_SALES, [])
-    weather_events = events.get(DS_CURATED_WEATHER, [])
+def resolve_run_date(triggering_asset_events=None, **context):
+    events = triggering_asset_events or {}
     
-    # Get the latest event's extra data
-    if sales_events:
-        sales_date = (sales_events[-1].extra or {}).get("run_date")
-        if sales_date:
-            return sales_date
-    
+    for asset, asset_events in events.items():
+        # Kiểm tra URI của asset để tìm đúng nguồn sales
+        if getattr(asset, "uri", None) == URI_INTER_SALES and asset_events:
+            run_date = (asset_events[-1].extra or {}).get("run_date")
+            if run_date:
+                return run_date
+
     return context["ds"]
+
 
 with DAG(
     dag_id="consumer_feature_engineering",
     start_date=datetime(2024, 1, 1),
-    # Triggered when BOTH are updated
-    schedule=[DS_CURATED_SALES, DS_CURATED_WEATHER],
+    schedule=[DS_INTER_SALES, DS_INTER_WEATHER],
     catchup=False,
-    tags=["layer:feature_store"],
+    tags=["layer:mart"],
 ) as dag:
 
-    target_date = resolve_upstream_run_date()
+    target_date = resolve_run_date()
 
-    # Join Sales + Weather -> Create Features (Lags, Rolling, etc.)
-    build_features = SparkSubmitOperator(
-        task_id="spark_build_features",
-        # Assuming this job exists or will be created
+    SparkSubmitOperator(
+        task_id="spark_join_features",
         application="/opt/spark/jobs/intermediate/join_features_pipeline.py",
         conn_id="spark_default",
+        properties_file="/opt/spark/conf/spark-defaults.conf",
         application_args=["--date", target_date],
-        outlets=[DS_FEATURE_STORE],
-        post_execute=attach_features_metadata,
+        outlets=[DS_MART_FEATURES],
+        post_execute=attach_metadata,
+        jars="/opt/airflow/jars/hadoop-aws-3.3.4.jar,/opt/airflow/jars/aws-java-sdk-bundle-1.12.262.jar,/opt/airflow/jars/postgresql-42.7.0.jar",
         conf={
             "spark.submit.deployMode": "client",
-        }
+            "spark.driver.host": "airflow-worker",
+            "spark.driver.bindAddress": "0.0.0.0",
+        },
     )

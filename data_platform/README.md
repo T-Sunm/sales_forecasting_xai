@@ -167,6 +167,26 @@ uv run dbt run
 - **Transformations**: Fact & Dimension tables
 - **Source**: `dbt/sales_forecasting_warehouse/models/marts/`
 
+## 🛠️ Technical Refinements (Airflow 3 + Spark 3.12)
+
+Recently, the platform was upgraded to ensure consistency and stability across the stack:
+
+### 1. Python Environment Alignment
+- **Uniform Version:** Both Airflow (Driver) and Spark (Executors) now use **Python 3.12**.
+- **Spark Configuration:** Explicitly pointing Spark to the correct Python executable via:
+  - `spark.pyspark.python: "/usr/bin/python3.12"` (Executors)
+  - `spark.pyspark.driver.python: "python3"` (Driver - auto-resolves in Airflow PATH)
+- **Distutils Fix:** Python 3.12 removes `distutils`. We've patched this by upgrading `setuptools` and `wheel` in the Spark Dockerfile to provide a compatibility layer.
+
+### 2. Airflow 3 (Asset-Aware) Orchestration
+- **From Datasets to Assets:** Migrated from `airflow.datasets.Dataset` to `airflow.sdk.Asset`.
+- **Event Lookup:** In Airflow 3, `triggering_asset_events` lookup should be done by iterating and checking the `.uri` or using the URI string as a key to avoid `unhashable dict` errors when the asset carries metadata.
+- **Outlet Metadata:** Using Asset objects as keys in `context["outlet_events"]` to properly attach metadata (like `run_date`) for downstream consumers.
+
+### 3. Integrated Connectivity
+- **postgres_dw Connection:** Added as an environment variable in `infra/airflow/docker-compose.yaml` to ensure Cosmos (dbt) and Spark jobs consistently point to the Data Warehouse container (`postgres_container`).
+  - `AIRFLOW_CONN_POSTGRES_DW`: `postgresql://postgres:changeme@postgres_container:5432/sales_forecasting`
+
 ## 🔄 Migration Notes
 
 ### Legacy Implementation (dbt-only)

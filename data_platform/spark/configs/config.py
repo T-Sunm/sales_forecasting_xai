@@ -11,7 +11,7 @@ BRONZE_PATH = f"s3a://{BUCKET_NAME}/bronze/"
 STAGING_PATH = f"s3a://{BUCKET_NAME}/staging/"
 INTER_PATH = f"s3a://{BUCKET_NAME}/intermediate/"
 SILVER_PATH = f"s3a://{BUCKET_NAME}/silver/"
-GOLD_PATH = f"s3a://{BUCKET_NAME}/gold/"
+MART_PATH = f"s3a://{BUCKET_NAME}/mart/"
 
 # Staging Layer Tables
 STAGING_TABLES = {
@@ -67,5 +67,7 @@ SPARK_CONFIGS = {
     "spark.hadoop.fs.s3a.access.key": S3_ACCESS_KEY,
     "spark.hadoop.fs.s3a.secret.key": S3_SECRET_KEY,
     "spark.hadoop.fs.s3a.path.style.access": "true",
-    "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem"
+    "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
+    "spark.pyspark.python": "/usr/bin/python3.12",
+    "spark.pyspark.driver.python": "python3",
 }

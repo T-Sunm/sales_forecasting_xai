@@ -12,5 +12,9 @@ select
   store_id,
   item_id,
   units,
-  log_units
-from {{ source('intermediate', 'int_active_sales') }}
+  log_units,
+  logunits_lag_1,
+  logunits_lag_7,
+  logunits_lag_14,
+  logunits_lag_28
+from {{ source('mart', 'sales_forecast') }}

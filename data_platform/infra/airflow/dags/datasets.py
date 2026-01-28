@@ -1,12 +1,14 @@
-from airflow.datasets import Dataset
+try:
+    from airflow.sdk import Asset
+except ImportError:
+    from airflow.datasets import Dataset as Asset
 
-# Logical Dataset URIs for Airflow orchestration
-# Note: Spark uses s3a:// protocol, but Dataset URI is just an identifier
-URI_CURATED_SALES = "s3://datalake/curated/sales"
-URI_CURATED_WEATHER = "s3://datalake/curated/weather"
-URI_FEATURE_STORE = "s3://datalake/feature_store/sales_forecast"
+URI_STG_DATA = "s3://datalake/staging/ready"
+URI_INTER_SALES = "s3://datalake/intermediate/sales"
+URI_INTER_WEATHER = "s3://datalake/intermediate/weather"
+URI_MART_FEATURES = "s3://datalake/mart/features"
 
-# Dataset Objects for Orchestration
-DS_CURATED_SALES = Dataset(URI_CURATED_SALES)
-DS_CURATED_WEATHER = Dataset(URI_CURATED_WEATHER)
-DS_FEATURE_STORE = Dataset(URI_FEATURE_STORE)
+DS_STG_DATA = Asset(URI_STG_DATA)
+DS_INTER_SALES = Asset(URI_INTER_SALES)
+DS_INTER_WEATHER = Asset(URI_INTER_WEATHER)
+DS_MART_FEATURES = Asset(URI_MART_FEATURES)

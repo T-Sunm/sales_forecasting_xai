@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).parent.parent.parent / "configs"))
-from config import STAGING_PATH, INTER_PATH, EWMA_ALPHAS
+from config import STAGING_PATH, INTER_PATH, EWMA_ALPHAS, SPARK_CONFIGS
 
 KEYS = ["store_id", "item_id", "date"]
 
@@ -22,7 +22,13 @@ def write_narrow(df, out_path, cols):
     df.select(*cols).write.mode("overwrite").parquet(out_path)
 
 def main():
-    spark = SparkSession.builder.appName("walmart-intermediate").getOrCreate()
+    builder = SparkSession.builder.appName("walmart-intermediate")
+    
+    # Apply configurations from config.py
+    for key, val in SPARK_CONFIGS.items():
+        builder = builder.config(key, val)
+        
+    spark = builder.getOrCreate()
     spark.sparkContext.setLogLevel("WARN")
 
     print(f"🚀 Starting Sales Features Pipeline")
@@ -51,11 +57,11 @@ def main():
 
     # ---------- 2. int_sales_with_lags ----------
     lags = [1, 2, 3, 4, 5, 6, 7, 14, 21, 28]
-    df_lags = active.select(*KEYS, "log_units")
+    df_lags = active.select(*KEYS, "log_units", "units")
     for k in lags:
         df_lags = df_lags.withColumn(f"logunits_lag_{k}", F.lag("log_units", k).over(w_si))
     
-    lag_cols = KEYS + ["log_units"] + [f"logunits_lag_{k}" for k in lags]
+    lag_cols = KEYS + ["log_units", "units"] + [f"logunits_lag_{k}" for k in lags]
     write_narrow(df_lags, INTER_PATH + "int_sales_with_lags", lag_cols)
     print("✅ Step 2: int_sales_with_lags saved")
 

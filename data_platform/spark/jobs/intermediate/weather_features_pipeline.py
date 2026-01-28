@@ -13,17 +13,17 @@ import sys
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).parent.parent.parent / "configs"))
-from config import STAGING_PATH, INTER_PATH, WEATHER_CODES, WEATHER_NUMERIC_COLS
+from config import STAGING_PATH, INTER_PATH, WEATHER_CODES, WEATHER_NUMERIC_COLS, SPARK_CONFIGS
 
 from pyspark.sql import SparkSession, Window
 from pyspark.sql import functions as F
 
 
 def create_spark_session():
-    return (SparkSession.builder
-            .appName("weather-features-intermediate")
-            .config("spark.sql.adaptive.enabled", "true")
-            .getOrCreate())
+    builder = SparkSession.builder.appName("weather-features-intermediate")
+    for key, val in SPARK_CONFIGS.items():
+        builder = builder.config(key, val)
+    return builder.getOrCreate()
 
 
 def load_input_data(spark):
