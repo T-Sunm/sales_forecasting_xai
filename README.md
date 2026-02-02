@@ -36,11 +36,11 @@ sales_forecasting_xai/
 │   ├── processed/
 │   └── features/
 │
-├── experiments/                    # 🔄 Experiment configs (thay ml/configs/)
-│   ├── base.yaml                   # Base config extends by others
+├── experiments/                    # 🔄 Experiment configs (replaces ml/configs/)
+│   ├── base.yaml                   # Base config extended by others
 │   ├── exp_lightgbm_v1.yaml
 │   ├── exp_xgboost_v1.yaml
-│   └── README.md                   # Hướng dẫn tạo experiment mới
+│   └── README.md                   # Guide to creating new experiments
 │
 ├── ml/                             # Core ML (MLflow Project)
 │   ├── MLproject                 # MLflow project definition
@@ -59,13 +59,22 @@ sales_forecasting_xai/
 │
 ├── outputs/                        # DVC tracked outputs
 │   ├── tuning/
-│   │   └── best_params.json        # 🆕 Kết quả Optuna -> Train reads this
+│   │   └── best_params.json        # 🆕 Optuna results -> Train reads this
 │   ├── models/                     # Local backup (MLflow is source of truth)
 │   ├── metrics/
 │   ├── plots/
 │   └── shap/
 │
 ├── data_platform/                  # Infra & Data Engineering
+│   ├── infra/
+│   │   ├── airflow/
+│   │   ├── postgres/
+│   │   ├── spark_minio/
+│   ├── dbt/
+│   ├── spark/
+│   └── pipelines/
+│
+├── backend/                        # Application layer (FastAPI)
 │   ├── infra/
 │   │   ├── airflow/
 │   │   ├── postgres/
@@ -99,7 +108,12 @@ sales_forecasting_xai/
 **1. Setup Environment**
 
 ```bash
+# Install dependencies
 uv sync
+
+# Setup environment variables
+cp example.env .env
+# Open .env and adjust variables if needed
 ```
 
 **2. Setup Infrastructure (Docker)**
@@ -108,13 +122,27 @@ Navigate to `data_platform/infra/` and start services (Spark, MinIO, Postgres, M
 
 **3. Run ML Pipeline**
 
-```bash
-# From root directory, run MLflow project
-mlflow run ./ml -e train --env-manager local
+#### Option A: Run from Root directory
+```powershell
+# 1. Prepare data
+uv --directory ml run python -m scripts.prepare_data
 
-# Or navigate to ml/ and run directly with python
+# 2. REQUIRED: Set environment variables for the current terminal session
+$env:MLFLOW_TRACKING_URI="http://127.0.0.1:5000"
+$env:MLFLOW_S3_ENDPOINT_URL="http://localhost:9000"
+
+# 3. Run Training or Tuning via MLflow Project
+uv --directory ml run mlflow run . -e train --experiment-name walmart-sales-baseline --env-manager local
+uv --directory ml run mlflow run . -e tune --experiment-name walmart-sales-tuning --env-manager local
+```
+
+#### Option B: Run from `ml/` directory
+```powershell
 cd ml
-python -m scripts.train
+$env:MLFLOW_TRACKING_URI="http://127.0.0.1:5000"
+$env:MLFLOW_S3_ENDPOINT_URL="http://localhost:9000"
+
+uv run mlflow run . -e train --experiment-name walmart-sales-baseline --env-manager local
 ```
 
 ## Contact

@@ -14,9 +14,8 @@ sys.path.append(os.getcwd())
 from utils.mlflow_utils import setup_mlflow
 from processing.validator import TARGET_COL, get_feature_cols
 
-def train(experiment_name, train_path, valid_path, run_name):
-    setup_mlflow()
-    mlflow.set_experiment(experiment_name)
+def train_logic(experiment_name, train_path, valid_path, run_name):
+    """Core training logic to be executed within an MLflow run context."""
     mlflow.lightgbm.autolog()
     
     if not os.path.exists(train_path):
@@ -51,36 +50,35 @@ def train(experiment_name, train_path, valid_path, run_name):
         "lambda_l1": 7.327783159306205e-08,
         "lambda_l2": 0.0035687388325977474,
         "max_depth": 11,
-        "n_estimators": 2000,
+        "n_estimators": 10,
         "random_state": 2025
     }
     
-    print(f"Starting training baseline model in experiment '{experiment_name}' with run name '{run_name}'...")
-    with mlflow.start_run(run_name=run_name):
-        model = lgbm.LGBMRegressor(**params)
-        
-        model.fit(
-            X_train, y_train,
-            eval_set=[(X_valid, y_valid)],
-            callbacks=[
-                lgbm.early_stopping(stopping_rounds=50),
-                lgbm.log_evaluation(period=50)
-            ],
-            categorical_feature=['store_id', 'item_id']
-        )
-        
-        preds = model.predict(X_valid)
-        mae = mean_absolute_error(y_valid, preds)
-        # RMSE on log-space is mathematically equivalent to RMSLE on original units
-        rmsle = np.sqrt(mean_squared_error(y_valid, preds))
-        
-        print(f"Validation MAE: {mae:.4f}")
-        print(f"Validation RMSLE (RMSE on log-target): {rmsle:.4f}")
-        
-        mlflow.log_metric("val_mae", mae)
-        mlflow.log_metric("val_rmsle", rmsle)
-        
-        print("Training complete and logged to MLflow.")
+    print(f"Starting training baseline model...")
+    model = lgbm.LGBMRegressor(**params)
+    
+    model.fit(
+        X_train, y_train,
+        eval_set=[(X_valid, y_valid)],
+        callbacks=[
+            lgbm.early_stopping(stopping_rounds=50),
+            lgbm.log_evaluation(period=50)
+        ],
+        categorical_feature=['store_id', 'item_id']
+    )
+    
+    preds = model.predict(X_valid)
+    mae = mean_absolute_error(y_valid, preds)
+    # RMSE on log-space is mathematically equivalent to RMSLE on original units
+    rmsle = np.sqrt(mean_squared_error(y_valid, preds))
+    
+    print(f"Validation MAE: {mae:.4f}")
+    print(f"Validation RMSLE (RMSE on log-target): {rmsle:.4f}")
+    
+    mlflow.log_metric("val_mae", mae)
+    mlflow.log_metric("val_rmsle", rmsle)
+    
+    print("Training complete and logged to MLflow.")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -90,9 +88,15 @@ if __name__ == "__main__":
     parser.add_argument("--run-name", default="lgbm_baseline_global", help="MLflow run name")
     args = parser.parse_args()
     
-    train(
-        experiment_name=args.experiment_name,
-        train_path=args.train_path,
-        valid_path=args.valid_path,
-        run_name=args.run_name
-    )
+    setup_mlflow()
+    print(f"Tracking URI: {mlflow.get_tracking_uri()}")
+
+    run = mlflow.active_run()
+    if run:
+        print(f"Using active MLflow run (managed by CLI): {run.info.run_id}")
+        train_logic(args.experiment_name, args.train_path, args.valid_path, args.run_name)
+    else:
+        print("No active run detected. Starting a new session...")
+        mlflow.set_experiment(args.experiment_name)
+        with mlflow.start_run(run_name=args.run_name):
+            train_logic(args.experiment_name, args.train_path, args.valid_path, args.run_name)
