@@ -42,60 +42,20 @@ sales_forecasting_xai/
 │   ├── exp_xgboost_v1.yaml
 │   └── README.md                   # Hướng dẫn tạo experiment mới
 │
-├── ml/                             # Core ML code
-│   ├── __init__.py
-│   │
-│   ├── processing/                 # 🆕 SHARED: Train + Inference đều dùng
+├── ml/                             # Core ML (MLflow Project)
+│   ├── MLproject                 # MLflow project definition
+│   ├── pyproject.toml            # ML-specific dependencies (uv)
+│   ├── uv.lock                   # uv lockfile
+│   ├── processing/               # Data validation & processing logic
 │   │   ├── __init__.py
-│   │   ├── transformers.py         # Feature transformers (sklearn compatible)
-│   │   ├── feature_pipeline.py     # End-to-end feature pipeline
-│   │   └── validator.py            # Pandera/Pydantic schema validation
-│   │
-│   ├── data/                       # Data loading
+│   │   └── validator.py
+│   ├── scripts/                  # MLflow entry points
 │   │   ├── __init__.py
-│   │   ├── dataset.py
-│   │   └── loader.py               # Load từ MinIO/local
-│   │
-│   ├── models/                     # Model definitions
-│   │   ├── __init__.py
-│   │   ├── base.py                 # Abstract base class
-│   │   ├── lightgbm_model.py
-│   │   ├── xgboost_model.py
-│   │   └── factory.py              # Model factory by name
-│   │
-│   ├── training/                   # Training logic
-│   │   ├── __init__.py
-│   │   ├── trainer.py              # Train + MLflow logging
-│   │   └── cross_validator.py
-│   │
-│   ├── tuning/                     # Optuna integration
-│   │   ├── __init__.py
-│   │   ├── objective.py            # Optuna objective
-│   │   ├── search_spaces.py        # Search space definitions
-│   │   └── tuner.py                # Study wrapper
-│   │
-│   ├── evaluation/                 # Metrics & XAI
-│   │   ├── __init__.py
-│   │   ├── metrics.py
-│   │   └── explainer.py            # SHAP wrapper
-│   │
-│   ├── serving/                    # 🆕 Inference wrapper
-│   │   ├── __init__.py
-│   │   ├── predictor.py            # Load from MLflow Registry + predict
-│   │   └── model_loader.py         # MLflow model URI loader
-│   │
-│   └── utils/
+│   │   ├── prepare_data.py       # Data preparation script
+│   │   └── train.py              # Model training script
+│   └── utils/                    # Shared utilities
 │       ├── __init__.py
-│       ├── mlflow_utils.py
-│       ├── config_loader.py        # 🆕 Load & merge configs
-│       └── logger.py
-│
-├── scripts/                        # DVC stage entry points
-│   ├── prepare_data.py
-│   ├── tune.py                     # Output: outputs/tuning/best_params.json
-│   ├── train.py                    # Input: best_params.json (optional override)
-│   ├── evaluate.py
-│   └── register_model.py           # Push to MLflow Registry
+│       └── mlflow_utils.py       # MLflow setup & config helpers
 │
 ├── outputs/                        # DVC tracked outputs
 │   ├── tuning/
@@ -110,7 +70,6 @@ sales_forecasting_xai/
 │   │   ├── airflow/
 │   │   ├── postgres/
 │   │   ├── spark_minio/
-│   │   └── mlflow/                 # 🆕 MLflow server config
 │   ├── dbt/
 │   ├── spark/
 │   └── pipelines/
@@ -147,15 +106,15 @@ uv sync
 
 Navigate to `data_platform/infra/` and start services (Spark, MinIO, Postgres, MLflow).
 
-**3. Run MLOps Pipeline**
+**3. Run ML Pipeline**
 
 ```bash
-# Prepare data, tune hyperparameters, and train model
-dvc repro
+# From root directory, run MLflow project
+mlflow run ./ml -e train --env-manager local
 
-# Or run individual steps
-dvc repro tune
-dvc repro train
+# Or navigate to ml/ and run directly with python
+cd ml
+python -m scripts.train
 ```
 
 ## Contact

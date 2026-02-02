@@ -1,0 +1,17 @@
+name: sales_forecasting_ml
+
+# This project uses uv for environment management.
+# To run locally using the existing uv environment:
+# mlflow run ./ml -e train --env-manager local
+
+entry_points:
+  prepare_data:
+    command: "python -m scripts.prepare_data"
+  
+  train:
+    parameters:
+      experiment_name: {type: string, default: "walmart-sales-baseline"}
+      train_path: {type: path, default: "../data/processed/train.parquet"}
+      valid_path: {type: path, default: "../data/processed/valid.parquet"}
+      run_name: {type: string, default: "lgbm_baseline_global"}
+    command: "python -m scripts.train --experiment-name {experiment_name} --train-path {train_path} --valid-path {valid_path} --run-name {run_name}"
