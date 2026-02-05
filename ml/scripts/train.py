@@ -83,8 +83,8 @@ def train_logic(experiment_name, train_path, valid_path, run_name):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--experiment-name", default="walmart-sales-baseline", help="MLflow experiment name")
-    parser.add_argument("--train-path", default="../data/processed/train.parquet", help="Path to training parquet file")
-    parser.add_argument("--valid-path", default="../data/processed/valid.parquet", help="Path to validation parquet file")
+    parser.add_argument("--train-path", default="../shared/data/processed/train.parquet", help="Path to training parquet file")
+    parser.add_argument("--valid-path", default="../shared/data/processed/valid.parquet", help="Path to validation parquet file")
     parser.add_argument("--run-name", default="lgbm_baseline_global", help="MLflow run name")
     args = parser.parse_args()
     

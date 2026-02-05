@@ -13,7 +13,7 @@ PG_HOST = os.getenv("POSTGRES_HOST", "localhost")
 PG_PORT = os.getenv("POSTGRES_PORT", "5432")
 PG_DB = "sales_forecasting"
 
-OUTPUT_DIR = "../data/processed"
+OUTPUT_DIR = "../shared/data/processed"
 CUTOFF_DATE = "2014-08-01"
 KAGGLE_TEST_CSV = "../shared/data/data_raw/test.csv"
 

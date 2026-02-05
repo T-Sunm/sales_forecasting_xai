@@ -11,8 +11,8 @@ entry_points:
   train:
     parameters:
       experiment_name: {type: string, default: "walmart-sales-baseline"}
-      train_path: {type: path, default: "../data/processed/train.parquet"}
-      valid_path: {type: path, default: "../data/processed/valid.parquet"}
+      train_path: {type: path, default: "../shared/data/processed/train.parquet"}
+      valid_path: {type: path, default: "../shared/data/processed/valid.parquet"}
       run_name: {type: string, default: "lgbm_baseline_global"}
     command: "python -m scripts.train --experiment-name {experiment_name} --train-path {train_path} --valid-path {valid_path} --run-name {run_name}"
 
@@ -22,7 +22,7 @@ entry_points:
       study_name: {type: string, default: "lgbm_global_optuna"}
       n_trials: {type: int, default: 10}
       timeout_sec: {type: int, default: 0}
-      train_path: {type: path, default: "../data/processed/train.parquet"}
-      valid_path: {type: path, default: "../data/processed/valid.parquet"}
+      train_path: {type: path, default: "../shared/data/processed/train.parquet"}
+      valid_path: {type: path, default: "../shared/data/processed/valid.parquet"}
       out_best_params: {type: string, default: "outputs/tuning/best_params.json"}
     command: "python -m scripts.tune --experiment-name {experiment_name} --study-name {study_name} --n-trials {n_trials} --timeout-sec {timeout_sec} --train-path {train_path} --valid-path {valid_path} --out-best-params {out_best_params}"

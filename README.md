@@ -22,70 +22,126 @@
 ```bash
 sales_forecasting_xai/
 │
-├── .dvc/                           # DVC config (auto-generated)
-├── .dvcignore                      # Ignore large model files if needed
-├── dvc.yaml                        # DVC Pipeline definition
-├── dvc.lock                        # DVC Pipeline lock (auto-generated)
-├── params.yaml                     # Default params - DVC reads this
+├── .env / example.env              # Environment variables
+├── .gitignore                      # Git ignore rules
+├── .python-version                 # Python version
+├── environment.yml                 # Conda environment
+├── README.md                       # Project documentation
 │
-├── pyproject.toml                  # 🆕 Root dependency management (UV/Poetry)
-├── Makefile                        # 🆕 Shortcuts: make tune, make train, make exp
-│
-├── data/                           # DVC tracked
-│   ├── raw/                        # .dvc files only
-│   ├── processed/
-│   └── features/
-│
-├── experiments/                    # 🔄 Experiment configs (replaces ml/configs/)
-│   ├── base.yaml                   # Base config extended by others
-│   ├── exp_lightgbm_v1.yaml
-│   ├── exp_xgboost_v1.yaml
-│   └── README.md                   # Guide to creating new experiments
-│
-├── ml/                             # Core ML (MLflow Project)
-│   ├── MLproject                 # MLflow project definition
-│   ├── pyproject.toml            # ML-specific dependencies (uv)
-│   ├── uv.lock                   # uv lockfile
-│   ├── processing/               # Data validation & processing logic
-│   │   ├── __init__.py
+├── ml/                             # Core ML Module (MLflow Project)
+│   ├── MLproject                   # MLflow entry points definition
+│   ├── pyproject.toml              # ML dependencies (uv)
+│   ├── uv.lock
+│   ├── README.md
+│   │
+│   ├── scripts/                    # MLflow entry points
+│   │   ├── prepare_data.py         # Data preparation
+│   │   ├── train.py                # Model training
+│   │   └── tune.py                 # Hyperparameter tuning (Optuna)
+│   │
+│   ├── tuning/                     # Optuna tuning logic
+│   │   └── objective.py
+│   │
+│   ├── processing/                 # Data processing
 │   │   └── validator.py
-│   ├── scripts/                  # MLflow entry points
-│   │   ├── __init__.py
-│   │   ├── prepare_data.py       # Data preparation script
-│   │   └── train.py              # Model training script
-│   └── utils/                    # Shared utilities
-│       ├── __init__.py
-│       └── mlflow_utils.py       # MLflow setup & config helpers
+│   │
+│   ├── utils/                      # Shared utilities
+│   │   └── mlflow_utils.py
+│   │
+│   └── outputs/tuning/             # Tuning results (best_params.json)
 │
-├── outputs/                        # DVC tracked outputs
-│   ├── tuning/
-│   │   └── best_params.json        # 🆕 Optuna results -> Train reads this
-│   ├── models/                     # Local backup (MLflow is source of truth)
-│   ├── metrics/
-│   ├── plots/
-│   └── shap/
+├── data_platform/                  # Data Engineering Layer
+│   ├── README.md
+│   ├── pyproject.toml
+│   │
+│   ├── infra/                      # Infrastructure (Docker)
+│   │   ├── airflow/                # Apache Airflow
+│   │   │   ├── docker-compose.yaml
+│   │   │   ├── Dockerfile
+│   │   │   └── dags/
+│   │   │       ├── producers/      # Data ingestion DAGs
+│   │   │       └── consumers/      # Data consumption DAGs
+│   │   │
+│   │   ├── spark_minio/            # Spark + MinIO
+│   │   │   ├── docker-compose.yml
+│   │   │   └── Dockerfile
+│   │   │
+│   │   ├── postgres/               # PostgreSQL Data Warehouse
+│   │   │   └── docker-compose.yml
+│   │   │
+│   │   └── mlflow/                 # MLflow Tracking Server
+│   │
+│   ├── spark/                      # Spark Jobs
+│   │   ├── configs/
+│   │   └── jobs/
+│   │       ├── staging/            # Raw -> Staging
+│   │       ├── intermediate/       # Staging -> Intermediate
+│   │       └── load_to_postgres.py
+│   │
+│   └── dbt/                        # DBT Transformations
+│       ├── sales_forecasting/      # Lakehouse Project
+│       │   ├── macros/
+│       │   └── models/
+│       │       ├── staging/
+│       │       ├── intermediate/
+│       │       └── marts/
+│       │
+│       └── sales_forecasting_warehouse/  # PostgreSQL Project
 │
-├── data_platform/                  # Infra & Data Engineering
-│   ├── infra/
-│   │   ├── airflow/
-│   │   ├── postgres/
-│   │   ├── spark_minio/
-│   ├── dbt/
-│   ├── spark/
-│   └── pipelines/
+├── backend/                        # FastAPI Application
+│   ├── pyproject.toml
+│   ├── run.py
+│   │
+│   └── src/
+│       ├── api/
+│       │   ├── main.py
+│       │   └── routers/
+│       │       ├── health.py
+│       │       ├── models.py
+│       │       ├── prediction.py
+│       │       └── xai.py
+│       │
+│       ├── core/                   # Business logic
+│       │   ├── model.py
+│       │   ├── forecasting.py
+│       │   └── xai_explainer.py
+│       │
+│       └── data_loader/
 │
-├── backend/                        # Application layer (FastAPI)
-│   ├── infra/
-│   │   ├── airflow/
-│   │   ├── postgres/
-│   │   ├── spark_minio/
-│   ├── dbt/
-│   ├── spark/
-│   └── pipelines/
+├── frontend/                       # Streamlit Application
+│   ├── pyproject.toml
+│   │
+│   └── src/
+│       ├── app.py
+│       │
+│       ├── components/
+│       │   ├── ui_builder/
+│       │   ├── ui_predictor/
+│       │   └── ui_xai/             # XAI Dashboard
+│       │       ├── shap_plots.py
+│       │       ├── explainer.py
+│       │       └── llm_explainer.py
+│       │
+│       └── services/
+│           └── api_client.py
 │
-├── backend/                        # Application layer (FastAPI)
-├── frontend/                       # UI layer (Streamlit)
-└── shared/notebooks/               # Data Exploration & Prototyping
+└── shared/                         # Shared Resources
+    ├── notebooks/                  # Jupyter Notebooks
+    │   └── wallmart_data/          # Walmart sales analysis
+    │       ├── 01_preprocessing.ipynb
+    │       ├── 02_EDA.ipynb
+    │       ├── 03_feature_engineering.ipynb
+    │       ├── 04_modelling_*.ipynb
+    │       └── 05_explain_model.ipynb
+    │
+    ├── data/                       # Shared data files
+    │   ├── processed/              # ML-ready data (output of prepare_data.py)
+    │   │   ├── train.parquet
+    │   │   ├── valid.parquet
+    │   │   └── test.parquet
+    │   └── data_raw/               # Raw Kaggle data
+    │
+    └── utils/
 ```
 
 ## MLOps Workflow Integration
