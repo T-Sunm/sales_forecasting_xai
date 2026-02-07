@@ -21,7 +21,7 @@ def parse_args():
     parser.add_argument("--timeout-sec", type=int, default=0, help="Timeout in seconds for Optuna study (0 for no timeout)")
     parser.add_argument("--train-path", default="../shared/data/processed/train.parquet", help="Path to training data")
     parser.add_argument("--valid-path", default="../shared/data/processed/valid.parquet", help="Path to validation data")
-    parser.add_argument("--out-best-params", default="outputs/tuning/best_params.json", help="Path to save best parameters")
+    parser.add_argument("--out-best-params", default="../shared/outputs/tuning/best_params.json", help="Path to save best parameters")
     return parser.parse_args()
 
 def champion_callback(study, trial):

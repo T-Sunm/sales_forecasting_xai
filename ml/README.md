@@ -44,6 +44,21 @@ Ensure you have configured your `.env` file in the root directory (based on `exa
 ### 1. Start the Server
 Run the following command in the `ml/` directory to start the tracking server:
 
+**PowerShell (Windows):**
+```powershell
+uv run mlflow server `
+  --host 127.0.0.1 `
+  --port 5000 `
+  --backend-store-uri "postgresql+psycopg2://postgres:changeme@localhost:5432/postgres" `
+  --default-artifact-root "s3://mlflow/artifacts"
+```
+
+**Or single line:**
+```powershell
+uv run mlflow server --host 127.0.0.1 --port 5000 --backend-store-uri "postgresql+psycopg2://postgres:changeme@localhost:5432/postgres" --default-artifact-root "s3://mlflow/artifacts"
+```
+
+**Bash (Linux/Mac):**
 ```bash
 uv run mlflow server \
   --host 127.0.0.1 \

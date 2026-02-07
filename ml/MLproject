@@ -14,7 +14,9 @@ entry_points:
       train_path: {type: path, default: "../shared/data/processed/train.parquet"}
       valid_path: {type: path, default: "../shared/data/processed/valid.parquet"}
       run_name: {type: string, default: "lgbm_baseline_global"}
-    command: "python -m scripts.train --experiment-name {experiment_name} --train-path {train_path} --valid-path {valid_path} --run-name {run_name}"
+      model_out: {type: path, default: "../shared/models/lgbm_baseline.pkl"}
+      metrics_out: {type: path, default: "../shared/outputs/metrics.json"}
+    command: "python -m scripts.train --experiment-name {experiment_name} --train-path {train_path} --valid-path {valid_path} --run-name {run_name} --model-out {model_out} --metrics-out {metrics_out}"
 
   tune:
     parameters:
@@ -24,5 +26,6 @@ entry_points:
       timeout_sec: {type: int, default: 0}
       train_path: {type: path, default: "../shared/data/processed/train.parquet"}
       valid_path: {type: path, default: "../shared/data/processed/valid.parquet"}
-      out_best_params: {type: string, default: "outputs/tuning/best_params.json"}
+      out_best_params: {type: string, default: "../shared/outputs/tuning/best_params.json"}
     command: "python -m scripts.tune --experiment-name {experiment_name} --study-name {study_name} --n-trials {n_trials} --timeout-sec {timeout_sec} --train-path {train_path} --valid-path {valid_path} --out-best-params {out_best_params}"
+
