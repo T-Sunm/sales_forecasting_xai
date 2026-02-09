@@ -17,6 +17,62 @@
 - **Explainable AI:**
   - SHAP values integration for transparent model predictions.
 
+## Architecture & Tech Stack
+
+### 1. Technology Stack
+
+| Component | Technology | Role |
+|-----------|------------|------|
+| **Data Lake** | MinIO | S3-compatible storage: Data Lake, DVC remote, MLflow artifacts. |
+| **Data Processing** | Apache Spark | Distributed ETL and feature engineering. |
+| **Data Warehouse** | PostgreSQL | DWH for marts + MLflow backend store. |
+| **Transformation** | DBT | SQL-based data transformations on PostgreSQL. |
+| **Orchestration** | Apache Airflow | Data pipeline scheduling and monitoring. |
+| **Pipeline Versioning** | DVC | Reproducibility, versioning data and ML pipelines. |
+| **ML Platform** | MLflow | Experiment tracking and Model Registry. |
+| **Hyperparameter Tuning** | Optuna | Automated hyperparameter optimization. |
+| **ML Core** | LightGBM, Scikit-learn | Gradient boosting models for forecasting. |
+| **Explainability** | SHAP | Model interpretation and feature importance. |
+| **Backend API** | FastAPI | Model serving and inference endpoints. |
+| **Frontend** | Streamlit | Dashboard and visualization interface. |
+
+### 2. Data Architecture
+
+The data flows through a multi-layer architecture to ensure quality and usability:
+
+- **Raw Layer (Bronze):** Original data ingested from external sources (Kaggle), stored in MinIO.
+- **Staging Layer (Silver):** Cleaned and standardized data, processed by Spark, stored in MinIO/Postgres.
+- **Intermediate Layer:** Data with business logic applied, joins between tables, prepared for final aggregation.
+- **Marts Layer (Gold):** Final, aggregated tables optimized for analytics and ML modeling (e.g., `fact_sales`, `dim_store`).
+
+### 3. Serving Architecture
+
+The system uses a decoupled client-server architecture for scalability:
+
+- **Model Registry:** Trained models are versioned and stored in MLflow.
+- **Backend (FastAPI):**
+    - Loads the best model from MLflow at startup.
+    - Exposes REST endpoints for `prediction`, `health`, and `xai` (explanations).
+    - Handles data validation using Pydantic schemas.
+- **Frontend (Streamlit):**
+    - Consumes the Backend APIs to fetch predictions and SHAP values.
+    - Renders interactive charts and natural language insights for end-users.
+
+### 4. MLOps Workflow Integration
+
+1.  **DVC (Data Version Control):**
+    -   Manages the DAG (prepare -> tune -> train -> evaluate).
+    -   Tracks inputs (data) and outputs (models, metrics).
+    -   Ensures reproducibility by locking dependency versions.
+
+2.  **MLflow:**
+    -   **Experiment Tracking:** Logs all parameters, metrics, and artifacts during training.
+    -   **Model Registry:** Acts as the *Source of Truth* for deployable models.
+
+3.  **Optuna:**
+    -   Performs automated hyperparameter tuning.
+    -   Outputs `best_params.json` which is automatically picked up by the training stage.
+
 ## Project Structure
 
 ```bash
@@ -69,7 +125,7 @@ sales_forecasting_xai/
 │   │   ├── postgres/               # PostgreSQL Data Warehouse
 │   │   │   └── docker-compose.yml
 │   │   │
-│   │   └── mlflow/                 # MLflow Tracking Server
+│   │   ├── mlflow/                 # MLflow Tracking Server
 │   │
 │   ├── spark/                      # Spark Jobs
 │   │   ├── configs/
@@ -144,62 +200,42 @@ sales_forecasting_xai/
     └── utils/
 ```
 
-## MLOps Workflow Integration
-
-1.  **DVC (Data Version Control):**
-    -   Manages the DAG (prepare -> tune -> train -> evaluate).
-    -   Tracks inputs (data) and outputs (models, metrics).
-    -   Ensures reproducibility by locking dependency versions.
-
-2.  **MLflow:**
-    -   **Experiment Tracking:** Logs all parameters, metrics, and artifacts during training.
-    -   **Model Registry:** Acts as the *Source of Truth* for deployable models.
-
-3.  **Optuna:**
-    -   Performs automated hyperparameter tuning.
-    -   Outputs `best_params.json` which is automatically picked up by the training stage.
-
 ## Quick Start 🚀
 
-**1. Setup Environment**
+To get started with the project, follow these steps:
+
+### 1. Global Setup
+
+Create the environment file used by all services:
 
 ```bash
-# Install dependencies
-uv sync
-
-# Setup environment variables
 cp example.env .env
-# Open .env and adjust variables if needed
+# Open .env and adjust variables as needed
 ```
 
-**2. Setup Infrastructure (Docker)**
+### 2. Module Setup & Execution
 
-Navigate to `data_platform/infra/` and start services (Spark, MinIO, Postgres, MLflow).
+Each module manages its own dependencies and execution logic:
 
-**3. Run ML Pipeline**
+#### ML Core
+- **What:** DVC pipeline (prepare → tune → train → evaluate), MLflow tracking, Optuna tuning.
+- **Docs:** [`ml/README.md`](./ml/README.md)
 
-#### Option A: Run from Root directory
-```powershell
-# 1. Prepare data
-uv --directory ml run python -m scripts.prepare_data
+#### Data Platform
+- **What:** Spark ETL, dbt models, Airflow DAGs.
+- **Docs:** [`data_platform/README.md`](./data_platform/README.md)
 
-# 2. REQUIRED: Set environment variables for the current terminal session
-$env:MLFLOW_TRACKING_URI="http://127.0.0.1:5000"
-$env:MLFLOW_S3_ENDPOINT_URL="http://localhost:9000"
+#### Backend API
+- **What:** FastAPI serving + `/prediction` + `/xai` endpoints.
+- **Docs:** [`backend/README.md`](./backend/README.md)
 
-# 3. Run Training or Tuning via MLflow Project
-uv --directory ml run mlflow run . -e train --experiment-name walmart-sales-baseline --env-manager local
-uv --directory ml run mlflow run . -e tune --experiment-name walmart-sales-tuning --env-manager local
-```
+#### Frontend Dashboard
+- **What:** Streamlit UI for predictions + SHAP visualizations.
+- **Docs:** [`frontend/README.md`](./frontend/README.md)
 
-#### Option B: Run from `ml/` directory
-```powershell
-cd ml
-$env:MLFLOW_TRACKING_URI="http://127.0.0.1:5000"
-$env:MLFLOW_S3_ENDPOINT_URL="http://localhost:9000"
-
-uv run mlflow run . -e train --experiment-name walmart-sales-baseline --env-manager local
-```
+#### Shared Resources
+- **What:** Jupyter notebooks and common utilities.
+- **Docs:** [`shared/README.md`](./shared/README.md)
 
 ## Contact
 
