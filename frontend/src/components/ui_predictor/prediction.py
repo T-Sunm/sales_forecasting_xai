@@ -8,341 +8,85 @@ import streamlit as st
 
 from services import get_api_client
 from utils.data_helpers import get_top_data_pair
+from config import COL_STORE_ID, COL_ITEM_ID
 
 
-def sales_prediction_view(data, api_client, feature_stats, feature_engineered_data):
+def sales_prediction_view(api_client):
     """
     Display the sales prediction tool interface
     
     Args:
-        data: Historical data for visualization
         api_client: APIClient instance for backend communication
-        feature_stats: Feature statistics dictionary
-        feature_engineered_data: Full feature-engineered dataset
     """
     st.title("Sales Prediction Tool")
 
-    if feature_engineered_data.empty:
-        st.error("Feature engineered data not loaded.")
+    # Sidebar: Store and Item selection via API
+    store_id, item_id = create_product_selection_sidebar_api(api_client)
+
+    if store_id is None or item_id is None:
+        st.warning("⚠️ Please select both Store and Item from sidebar")
         return
-
-    # Determine store and item column names
-    if "store_nbr" in feature_engineered_data.columns:
-        store_col = "store_nbr"
-    
-    if "item_nbr" in feature_engineered_data.columns:
-        item_col = "item_nbr"
-
-    # Check for store/item name columns
-    has_store_names = "store_name" in feature_engineered_data.columns
-    has_item_names = "item_name" in feature_engineered_data.columns
-
-    # Create mapping dictionaries for names if available
-    store_names, item_names = create_name_mappings(
-        feature_engineered_data, store_col, item_col, has_store_names, has_item_names
-    )
-
-    # Get unique store and item lists
-    stores = sorted(feature_engineered_data[store_col].unique())
-
-    # Create sidebar for selections
-    store_id, item_id = create_product_selection_sidebar(
-        feature_engineered_data,
-        stores,
-        store_col,
-        item_col,
-        has_store_names,
-        has_item_names,
-        store_names,
-        item_names,
-    )
 
     # Main form content
     st.subheader("Prediction Parameters")
-
     prediction_inputs = collect_prediction_inputs()
 
     # Make prediction button
     if st.button("Predict Sales", type="primary"):
         generate_prediction(
             api_client,
-            feature_engineered_data,
             store_id,
             item_id,
-            store_col,
-            item_col,
-            prediction_inputs,
-            has_store_names,
-            has_item_names,
-            store_names,
-            item_names,
+            prediction_inputs
         )
 
 
-def create_name_mappings(df, store_col, item_col, has_store_names, has_item_names):
-    """Create mapping dictionaries for store and item names"""
-
-    store_names = {}
-    item_names = {}
-
-    if has_store_names:
-        # Create store ID to name mapping
-        for _, row in df[[store_col, "store_name"]].drop_duplicates().iterrows():
-            store_names[row[store_col]] = row["store_name"]
-
-    if has_item_names:
-        # Create item ID to name mapping
-        for _, row in df[[item_col, "item_name"]].drop_duplicates().iterrows():
-            item_names[row[item_col]] = row["item_name"]
-
-    return store_names, item_names
-
-
-def create_product_selection_sidebar(
-    df,
-    stores,
-    store_col,
-    item_col,
-    has_store_names,
-    has_item_names,
-    store_names,
-    item_names,
-):
-    """Create sidebar for store and product selection"""
-
-    # Get top pair for default selection
-    top_store, top_item = get_top_data_pair(df)
+def create_product_selection_sidebar_api(api):
+    """Create sidebar for store and product selection using API"""
+    
+    # 1. Get Top Pair for default selection
+    top_res = api.get_top_pair()
+    top_store = top_res.get("store_id")
+    top_item = top_res.get("item_id")
     
     with st.sidebar:
         st.header("Product Selection")
 
-        # Store selection with names if available
-        if has_store_names:
-            store_options = [
-                f"{store_id} - {store_names[store_id]}" for store_id in stores
-            ]
-            # Find index of top store
-            default_store_idx = 0
-            if top_store is not None:
-                for i, s in enumerate(stores):
-                    if s == top_store:
-                        default_store_idx = i
-                        break
-                        
-            selected_store_option = st.selectbox("Select Store", options=store_options, index=default_store_idx)
-            store_id = int(selected_store_option.split(" - ")[0])
-        else:
-            # Find index of top store
-            default_store_idx = 0
-            if top_store is not None and top_store in stores:
-                default_store_idx = stores.index(top_store)
-                
-            store_id = st.selectbox("Select Store ID", options=stores, index=default_store_idx)
-
-        # Get items for the selected store
-        store_items = sorted(df[df[store_col] == store_id][item_col].unique())
-
-        # Item selection with names if available
-        if has_item_names:
-            item_options = [
-                f"{item_id} - {item_names[item_id]}"
-                for item_id in store_items
-                if item_id in item_names
-            ]
+        # 2. Store Selection
+        stores = api.get_stores_list()
+        if not stores:
+            st.error("No stores available.")
+            return None, None
             
-            # Find index of top item if it's in the current store's items
-            default_item_idx = 0
-            if top_item is not None and top_item in store_items:
-                # We need to find the index in the options list
-                for i, opt in enumerate(item_options):
-                    if opt.startswith(f"{top_item} -"):
-                        default_item_idx = i
-                        break
+        default_store_idx = 0
+        if top_store in stores:
+            default_store_idx = stores.index(top_store)
             
-            selected_item_option = st.selectbox("Select Product", options=item_options, index=default_item_idx)
-            item_id = int(selected_item_option.split(" - ")[0])
-        else:
-            # Find index of top item if it's in the current store's items
-            default_item_idx = 0
-            if top_item is not None and top_item in store_items:
-                default_item_idx = store_items.index(top_item)
-                
-            item_id = st.selectbox("Select Product ID", options=store_items, index=default_item_idx)
+        store_id = st.selectbox("Select Store ID", options=stores, index=default_store_idx)
+
+        # 3. Item Selection
+        store_items = api.get_items_list(store_id)
+        if not store_items:
+            st.warning(f"No items found for Store {store_id}")
+            return store_id, None
+            
+        default_item_idx = 0
+        if top_item in store_items:
+            default_item_idx = store_items.index(top_item)
+            
+        item_id = st.selectbox("Select Product ID", options=store_items, index=default_item_idx)
 
     return store_id, item_id
 
 
-def collect_prediction_inputs():
-    """Collect all prediction inputs from the user"""
-    
-    st.info("💡 **Lưu ý:** Các features phức tạp (lag, rolling stats, EWMA) sẽ được tự động lấy từ dữ liệu lịch sử")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.subheader("📅 Thông tin ngày")
-        # Date selection
-        prediction_date = st.date_input(
-            "Ngày dự đoán", 
-            datetime.now().date() + timedelta(days=1)
-        )
-
-        # Holiday checkbox
-        is_holiday = st.checkbox("Ngày lễ (Holiday)", value=False)
-        
-        # Black Friday checkbox
-        is_blackfriday = st.checkbox("Black Friday", value=False)
-
-    with col2:
-        st.subheader("🌤️ Thông tin thời tiết")
-        
-        # Temperature (tmax in the features)
-        tmax = st.slider("Nhiệt độ tối đa (°F)", 0.0, 110.0, 70.0, 0.5)
-        
-        # Cool (cooling degree days)
-        cool = st.slider("Cool (Cooling Degree Days)", 0.0, 50.0, 10.0, 0.5)
-        
-        # Precipitation
-        preciptotal = st.slider("Lượng mưa (inch)", 0.0, 5.0, 0.0, 0.1)
-
-    # Weather section
-    st.subheader("🌦️ Điều kiện thời tiết chi tiết")
-    
-    # Create expandable section for weather codes
-    with st.expander("Chọn các hiện tượng thời tiết (Weather Codes)", expanded=False):
-        st.caption("Chọn các hiện tượng thời tiết đang xảy ra hoặc dự kiến xảy ra:")
-        
-        # Weather codes organized by category
-        weather_col1, weather_col2, weather_col3 = st.columns(3)
-        
-        weather_codes = {}
-        
-        with weather_col1:
-            st.markdown("**☁️ Mây/Sương mù**")
-            weather_codes['FG'] = st.checkbox("FG - Sương mù (Fog)", value=False)
-            weather_codes['FG+'] = st.checkbox("FG+ - Sương mù dày", value=False)
-            weather_codes['MIFG'] = st.checkbox("MIFG - Sương mù mỏng", value=False)
-            weather_codes['PRFG'] = st.checkbox("PRFG - Sương mù từng phần", value=False)
-            weather_codes['FZFG'] = st.checkbox("FZFG - Sương mù đóng băng", value=False)
-            weather_codes['VCFG'] = st.checkbox("VCFG - Sương mù gần", value=False)
-            weather_codes['BR'] = st.checkbox("BR - Sương mù nhẹ (Mist)", value=False)
-            weather_codes['HZ'] = st.checkbox("HZ - Khói mù (Haze)", value=False)
-            
-        with weather_col2:
-            st.markdown("**🌧️ Mưa/Tuyết**")
-            weather_codes['RA'] = st.checkbox("RA - Mưa (Rain)", value=False)
-            weather_codes['DZ'] = st.checkbox("DZ - Mưa phùn (Drizzle)", value=False)
-            weather_codes['FZRA'] = st.checkbox("FZRA - Mưa đóng băng", value=False)
-            weather_codes['FZDZ'] = st.checkbox("FZDZ - Mưa phùn đóng băng", value=False)
-            weather_codes['SN'] = st.checkbox("SN - Tuyết (Snow)", value=False)
-            weather_codes['BLSN'] = st.checkbox("BLSN - Tuyết thổi", value=False)
-            weather_codes['SG'] = st.checkbox("SG - Hạt tuyết", value=False)
-            weather_codes['PL'] = st.checkbox("PL - Mưa đá nhỏ", value=False)
-            weather_codes['GR'] = st.checkbox("GR - Mưa đá (Hail)", value=False)
-            weather_codes['GS'] = st.checkbox("GS - Mưa đá nhỏ", value=False)
-            
-        with weather_col3:
-            st.markdown("**⛈️ Dông/Bão bụi**")
-            weather_codes['TS'] = st.checkbox("TS - Dông (Thunderstorm)", value=False)
-            weather_codes['TSRA'] = st.checkbox("TSRA - Dông có mưa", value=False)
-            weather_codes['TSSN'] = st.checkbox("TSSN - Dông có tuyết", value=False)
-            weather_codes['VCTS'] = st.checkbox("VCTS - Dông gần", value=False)
-            weather_codes['SQ'] = st.checkbox("SQ - Giông (Squall)", value=False)
-            weather_codes['DU'] = st.checkbox("DU - Bụi (Dust)", value=False)
-            weather_codes['BLDU'] = st.checkbox("BLDU - Bão bụi", value=False)
-            weather_codes['FU'] = st.checkbox("FU - Khói (Smoke)", value=False)
-            weather_codes['BCFG'] = st.checkbox("BCFG - Sương mù từng mảng", value=False)
-            weather_codes['UP'] = st.checkbox("UP - Không xác định", value=False)
-
-    # Atmospheric pressure section
-    st.subheader("🌡️ Áp suất khí quyển")
-    pressure_col1, pressure_col2 = st.columns(2)
-    
-    with pressure_col1:
-        stnpressure = st.slider("Áp suất trạm (inHg)", 28.0, 31.0, 29.92, 0.01)
-    
-    with pressure_col2:
-        sealevel = st.slider("Áp suất mực nước biển (inHg)", 28.0, 31.0, 29.92, 0.01)
-
-    # Wind section
-    st.subheader("💨 Gió")
-    wind_col1, wind_col2 = st.columns(2)
-    
-    with wind_col1:
-        resultspeed = st.slider("Tốc độ gió (mph)", 0.0, 50.0, 5.0, 0.5)
-    
-    with wind_col2:
-        resultdir = st.slider("Hướng gió (độ)", 0, 360, 180, 10)
-
-    # Calculate derived parameters
-    month = prediction_date.month
-    day = prediction_date.day
-    year = prediction_date.year
-    day_of_week = prediction_date.weekday()
-    is_weekend = 1 if day_of_week >= 5 else 0
-    
-    # Season mapping (matching your features: season_Spring, season_Summer, season_Winter)
-    # Note: Fall seems to be the baseline (not in features)
-    if month in [3, 4, 5]:
-        season = "Spring"
-    elif month in [6, 7, 8]:
-        season = "Summer"
-    elif month in [12, 1, 2]:
-        season = "Winter"
-    else:
-        season = "Fall"  # Baseline
-
-    # Return dictionary for API call (not Pydantic model)
-    prediction_dict = {
-        "date": prediction_date.isoformat(),
-        "year": year,
-        "month": month,
-        "day": day,
-        "day_of_week": day_of_week,
-        "is_weekend": is_weekend,
-        "season": season,
-        "is_holiday": int(is_holiday),
-        "is_blackfriday": int(is_blackfriday),
-        # Weather features
-        "tmax": tmax,
-        "cool": cool,
-        "preciptotal": preciptotal,
-        "stnpressure": stnpressure,
-        "sealevel": sealevel,
-        "resultspeed": resultspeed,
-        "resultdir": resultdir,
-        # Weather codes
-        **{code: int(value) for code, value in weather_codes.items()},
-    }
-    
-    # Also attach original date object for display purposes
-    prediction_dict["_date_obj"] = prediction_date
-    
-    return prediction_dict
-
-
 def generate_prediction(
     api_client,
-    feature_engineered_data,
     store_id,
     item_id,
-    store_col,
-    item_col,
-    prediction_inputs,
-    has_store_names,
-    has_item_names,
-    store_names,
-    item_names,
+    prediction_inputs
 ):
     """
     Generate sales prediction using Backend API and display results
-    
-    Args:
-        api_client: APIClient instance
-        feature_engineered_data: Full dataset for context
-        store_id, item_id: Selected store and item
-        prediction_inputs: Dictionary with prediction parameters
-        Other args: Display formatting options
     """
     with st.spinner("🔮 Generating prediction via backend API..."):
         try:
@@ -356,15 +100,12 @@ def generate_prediction(
                 prediction_input=prediction_inputs
             )
             
-            # Check for errors (check if error VALUE is truthy, not just if key exists)
             if not result or result.get("error"):
                 error_msg = result.get("error", "Unknown error") if result else "No response from backend"
                 st.error(f"❌ Prediction failed: {error_msg}")
                 return
             
-            # Extract prediction value
             prediction_value = result.get("prediction_value")
-            
             if prediction_value is None:
                 st.error("❌ No prediction value returned from backend")
                 return
@@ -373,34 +114,91 @@ def generate_prediction(
             if date_obj:
                 prediction_inputs["_date_obj"] = date_obj
             
-            # Display results (no model/features for now - backend doesn't return them)
+            # Fetch historical context from API instead of local DF
+            hist_res = api_client.get_historical_data(store_id=store_id, item_id=item_id, limit=100)
+            historical_df = pd.DataFrame(hist_res.get("data", []))
+            if not historical_df.empty:
+                historical_df["date"] = pd.to_datetime(historical_df["date"])
+
             display_prediction_results(
                 prediction_value,
                 store_id,
                 item_id,
                 prediction_inputs,
-                feature_engineered_data,
-                store_col,
-                item_col,
-                has_store_names,
-                has_item_names,
-                store_names,
-                item_names,
-                model=None,  # Not available from API
-                model_features=None,  # Not available from API
-                forecast_history=None,  # Not available from API yet
+                historical_df,
+                forecast_history=None, # Backend placeholder
             )
             
             st.success("✅ Prediction completed successfully!")
 
         except Exception as e:
             st.error(f"❌ Error making prediction: {str(e)}")
-            import traceback
-            with st.expander("Show error details"):
-                st.code(traceback.format_exc())
 
 
 # prepare_prediction_input() has been moved to src/core/model.py (ModelManager.prepare_input())
+
+
+def collect_prediction_inputs():
+    """Collect all prediction inputs from the user"""
+    
+    st.info("💡 **Lưu ý:** Các features phức tạp (lag, rolling stats, EWMA) sẽ được tự động lấy từ dữ liệu lịch sử")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("📅 Thông tin ngày")
+        prediction_date = st.date_input("Ngày dự đoán", datetime.now().date() + timedelta(days=1))
+        is_holiday = st.checkbox("Ngày lễ (Holiday)", value=False)
+        is_blackfriday = st.checkbox("Black Friday", value=False)
+
+    with col2:
+        st.subheader("🌤️ Thông tin thời tiết")
+        tmax = st.slider("Nhiệt độ tối đa (°F)", 0.0, 110.0, 70.0, 0.5)
+        cool = st.slider("Cool (Cooling Degree Days)", 0.0, 50.0, 10.0, 0.5)
+        preciptotal = st.slider("Lượng mưa (inch)", 0.0, 5.0, 0.0, 0.1)
+
+    # Weather codes
+    with st.expander("Chọn các hiện tượng thời tiết (Weather Codes)"):
+        w_col1, w_col2, w_col3 = st.columns(3)
+        codes = {}
+        with w_col1:
+            for c in ['FG', 'FG+', 'MIFG', 'PRFG', 'FZFG', 'VCFG', 'BR', 'HZ']:
+                codes[c] = st.checkbox(f"{c}", value=False)
+        with w_col2:
+            for c in ['RA', 'DZ', 'FZRA', 'FZDZ', 'SN', 'BLSN', 'SG', 'PL', 'GR', 'GS']:
+                codes[c] = st.checkbox(f"{c}", value=False)
+        with w_col3:
+            for c in ['TS', 'TSRA', 'TSSN', 'VCTS', 'SQ', 'DU', 'BLDU', 'FU', 'BCFG', 'UP']:
+                codes[c] = st.checkbox(f"{c}", value=False)
+
+    st.subheader("🌡️ Áp suất & Gió")
+    p_col1, p_col2, p_col3, p_col4 = st.columns(4)
+    with p_col1: stnpressure = st.number_input("Trạm (inHg)", 28.0, 31.0, 29.92)
+    with p_col2: sealevel = st.number_input("Biển (inHg)", 28.0, 31.0, 29.92)
+    with p_col3: resultspeed = st.number_input("Gió (mph)", 0.0, 50.0, 5.0)
+    with p_col4: resultdir = st.number_input("Hướng (độ)", 0, 360, 180)
+
+    # Derived params
+    month, day, year = prediction_date.month, prediction_date.day, prediction_date.year
+    day_of_week = prediction_date.weekday()
+    
+    if month in [3, 4, 5]: season = "Spring"
+    elif month in [6, 7, 8]: season = "Summer"
+    elif month in [12, 1, 2]: season = "Winter"
+    else: season = "Fall"
+
+    inputs = {
+        "date": prediction_date.isoformat(),
+        "year": year, "month": month, "day": day, "day_of_week": day_of_week,
+        "is_weekend": 1 if day_of_week >= 5 else 0, "season": season,
+        "is_holiday": int(is_holiday), "is_blackfriday": int(is_blackfriday),
+        "tmax": tmax, "cool": cool, "preciptotal": preciptotal,
+        "stnpressure": stnpressure, "sealevel": sealevel,
+        "resultspeed": resultspeed, "resultdir": resultdir,
+        **{c: int(v) for c, v in codes.items()},
+        "_date_obj": prediction_date
+    }
+    return inputs
 
 
 def display_prediction_results(
@@ -408,106 +206,36 @@ def display_prediction_results(
     store_id,
     item_id,
     prediction_inputs,
-    historical_data,
-    store_col,
-    item_col,
-    has_store_names,
-    has_item_names,
-    store_names,
-    item_names,
-    model,
-    model_features,
+    historical_df,
     forecast_history=None,
 ):
     """Display prediction results with visualizations"""
-
     st.header("Prediction Results")
-
-    # Create results in columns
     res_col1, res_col2 = st.columns(2)
 
     with res_col1:
-        # Display prediction with context
         st.metric(label="Predicted Units", value=f"{prediction_value:,.0f}")
-
-        # Display store and item info
-        if has_store_names:
-            st.write(f"**Store:** {store_names[store_id]}")
-        else:
-            st.write(f"**Store ID:** {store_id}")
-
-        if has_item_names:
-            st.write(f"**Product:** {item_names[item_id]}")
-        else:
-            st.write(f"**Product ID:** {item_id}")
-
-        # Handle date display (dict vs Pydantic model)
-        date_display = prediction_inputs.get("_date_obj") or prediction_inputs.get("date")
-        if date_display:
-            if isinstance(date_display, str):
-                from datetime import datetime
-                date_display = datetime.fromisoformat(date_display).date()
-            st.write(f"**Date:** {date_display.strftime('%B %d, %Y')}")
+        st.write(f"**Store ID:** {store_id}")
+        st.write(f"**Product ID:** {item_id}")
         
-        season = prediction_inputs.get("season", "Unknown")
-        st.write(f"**Season:** {season}")
+        date_obj = prediction_inputs.get("_date_obj")
+        if date_obj:
+            st.write(f"**Date:** {date_obj.strftime('%B %d, %Y')}")
         
-        if prediction_inputs.get("is_holiday"):
-            st.write("**Holiday:** Yes")
-        if prediction_inputs.get("is_blackfriday"):
-            st.write("**Black Friday:** Yes")
+        st.write(f"**Season:** {prediction_inputs.get('season')}")
 
     with res_col2:
-        # Get historical context
-        historical = historical_data[
-            (historical_data[store_col] == store_id)
-            & (historical_data[item_col] == item_id)
-        ].sort_values("date")
-
-        # Use 'units' column instead of 'sales'
-        units_col = "units" if "units" in historical.columns else "sales"
-        
-        if units_col in historical.columns:
-            # Calculate key statistics
-            last_value = historical[units_col].iloc[-1] if len(historical) > 0 else 0
-            last_date = historical["date"].iloc[-1] if len(historical) > 0 else None
-
-            avg_units = historical[units_col].mean()
-
-            max_units = historical[units_col].max()
-            max_date = (
-                historical.loc[historical[units_col].idxmax(), "date"]
-                if len(historical) > 0
-                else None
-            )
-
-            # Display average and trend with dates
-            st.metric(
-                label="Historical Average",
-                value=f"{avg_units:,.0f} units",
-            )
-            st.write(
-                f"**Period:** {historical['date'].min().strftime('%b %d, %Y')} to {historical['date'].max().strftime('%b %d, %Y')}"
-            )
-
-            st.metric(
-                label="Last Recorded Units",
-                value=f"{last_value:,.0f} units",
-            )
-            if last_date is not None:
-                st.write(f"**Date:** {last_date.strftime('%b %d, %Y')}")
-
+        if not historical_df.empty:
+            units_col = "units" if "units" in historical_df.columns else "sales"
+            avg_units = historical_df[units_col].mean()
+            max_units = historical_df[units_col].max()
+            
+            st.metric(label="Historical Average", value=f"{avg_units:,.0f} units")
             st.metric(label="Historical Maximum", value=f"{max_units:,.0f} units")
-            if max_date is not None:
-                st.write(f"**Date:** {max_date.strftime('%b %d, %Y')}")
+            st.write(f"**Period:** {historical_df['date'].min().date()} to {historical_df['date'].max().date()}")
 
-    # Historical context
-    date_for_display = prediction_inputs.get("_date_obj") or prediction_inputs.get("date")
-    if isinstance(date_for_display, str):
-        from datetime import datetime
-        date_for_display = datetime.fromisoformat(date_for_display).date()
-    
-    display_historical_context(historical, date_for_display, prediction_value, forecast_history)
+    # Visualizations
+    display_historical_context(historical_df, prediction_inputs.get("_date_obj"), prediction_value, forecast_history)
 
     # Feature importance (skip if not available from API)
     if model_features is not None and model is not None:

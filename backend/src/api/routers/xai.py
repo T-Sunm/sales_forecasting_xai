@@ -8,9 +8,10 @@ from pydantic import BaseModel, Field
 from typing import Optional
 import pandas as pd
 
-from core.model import ModelManager
-from core import xai_explainer
-from api.dependencies import get_model_manager, get_feature_data
+from src.core.model import ModelManager
+from src.core import xai_explainer
+from src.api.dependencies import get_model_manager, get_feature_data
+from src.config import COL_STORE_ID, COL_ITEM_ID
 
 router = APIRouter(prefix="/xai", tags=["XAI"])
 
@@ -52,8 +53,8 @@ async def get_global_importance(
     
     # Get data for this store-item pair
     store_item_data = feature_data[
-        (feature_data["store_nbr"] == store_id) &
-        (feature_data["item_nbr"] == item_id)
+        (feature_data[COL_STORE_ID] == store_id) &
+        (feature_data[COL_ITEM_ID] == item_id)
     ]
     
     if store_item_data.empty:
@@ -116,8 +117,8 @@ async def get_dependence(
     
     # Get data
     store_item_data = feature_data[
-        (feature_data["store_nbr"] == store_id) &
-        (feature_data["item_nbr"] == item_id)
+        (feature_data[COL_STORE_ID] == store_id) &
+        (feature_data[COL_ITEM_ID] == item_id)
     ]
     
     if store_item_data.empty:
@@ -186,8 +187,8 @@ async def get_local_explanation(
     
     # Get data
     store_item_data = feature_data[
-        (feature_data["store_nbr"] == store_id) &
-        (feature_data["item_nbr"] == item_id)
+        (feature_data[COL_STORE_ID] == store_id) &
+        (feature_data[COL_ITEM_ID] == item_id)
     ]
     
     if store_item_data.empty:

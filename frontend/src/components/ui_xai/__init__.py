@@ -1,18 +1,8 @@
 """
 XAI (Explainable AI) Module
 Provides SHAP-based explanations for sales forecasting model
+All SHAP computations are now handled by Backend API
 """
-
-# Explainer functions
-from .explainer import (
-    get_model_for_store_item,
-    prepare_sample_data,
-    compute_shap_values,
-    classify_feature,
-    get_feature_importance_df,
-    get_category_summary,
-    get_top_features_per_category
-)
 
 # Plotting functions
 from .shap_plots import (
@@ -36,14 +26,6 @@ from .llm_explainer import (
 from .xai_view import xai_explanation_view
 
 __all__ = [
-    # Explainer
-    'get_model_for_store_item',
-    'prepare_sample_data',
-    'compute_shap_values',
-    'classify_feature',
-    'get_feature_importance_df',
-    'get_category_summary',
-    'get_top_features_per_category',
     # Plotting
     'plot_global_feature_importance',
     'plot_shap_beeswarm',

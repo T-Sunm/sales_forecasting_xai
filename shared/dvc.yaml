@@ -18,11 +18,13 @@ stages:
       --valid-path ../shared/data/processed/valid.parquet
       --model-out ../shared/models/lgbm_baseline.pkl
       --metrics-out ../shared/outputs/metrics.json
+      --best-params ../shared/outputs/tuning/best_params.json
     deps:
       - ../ml/scripts/train.py
       - ../ml/processing/validator.py
       - data/processed/train.parquet
       - data/processed/valid.parquet
+      - outputs/tuning/best_params.json
     params:
       - train
     outs:

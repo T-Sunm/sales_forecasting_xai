@@ -19,8 +19,8 @@ def display_global_explanations(
     feature_names,
     importance_df,
     category_summary,
-    store_nbr=None,
-    item_nbr=None,
+    store_id=None,
+    item_id=None,
     llm_generator=None
 ):
     """
@@ -32,8 +32,8 @@ def display_global_explanations(
         feature_names: List of feature names
         importance_df: Feature importance DataFrame
         category_summary: Category summary DataFrame
-        store_nbr: Store ID for LLM context
-        item_nbr: Item ID for LLM context
+        store_id: Store ID for LLM context
+        item_id: Item ID for LLM context
         llm_generator: SalesInsightGenerator instance
     """
     st.header("📊 Global Feature Importance")
@@ -51,23 +51,23 @@ def display_global_explanations(
     # Render each tab
     _render_tab1_top_features(
         shap_values, feature_names, importance_df, category_summary,
-        store_nbr, item_nbr, llm_generator, tab1
+        store_id, item_id, llm_generator, tab1
     )
     
     _render_tab2_categories(
         importance_df, category_summary,
-        store_nbr, item_nbr, llm_generator, tab2
+        store_id, item_id, llm_generator, tab2
     )
     
     _render_tab3_beeswarm(
         shap_values, X_sample, importance_df, category_summary,
-        store_nbr, item_nbr, llm_generator, tab3
+        store_id, item_id, llm_generator, tab3
     )
 
 
 def _render_tab1_top_features(
     shap_values, feature_names, importance_df, category_summary,
-    store_nbr, item_nbr, llm_generator, tab
+    store_id, item_id, llm_generator, tab
 ):
     """Render Tab 1: Top Features"""
     with tab:
@@ -109,8 +109,8 @@ def _render_tab1_top_features(
                 generate_func=llm_generator.generate_global_report if llm_generator else None,
                 title="🤖 Top Features Analysis",
                 figure_prefix="top_features",
-                store_nbr=store_nbr,
-                item_nbr=item_nbr,
+                store_id=store_id,
+                item_id=item_id,
                 importance_df=importance_df,
                 category_summary=category_summary,
                 tab_type="top_features"
@@ -119,7 +119,7 @@ def _render_tab1_top_features(
 
 def _render_tab2_categories(
     importance_df, category_summary,
-    store_nbr, item_nbr, llm_generator, tab
+    store_id, item_id, llm_generator, tab
 ):
     """Render Tab 2: Feature Categories"""
     with tab:
@@ -161,8 +161,8 @@ def _render_tab2_categories(
             generate_func=llm_generator.generate_global_report if llm_generator else None,
             title="🤖 Category Analysis",
             figure_prefix="categories",
-            store_nbr=store_nbr,
-            item_nbr=item_nbr,
+            store_id=store_id,
+            item_id=item_id,
             importance_df=importance_df,
             category_summary=category_summary,
             tab_type="categories"
@@ -171,7 +171,7 @@ def _render_tab2_categories(
 
 def _render_tab3_beeswarm(
     shap_values, X_sample, importance_df, category_summary,
-    store_nbr, item_nbr, llm_generator, tab
+    store_id, item_id, llm_generator, tab
 ):
     """Render Tab 3: SHAP Summary (Beeswarm) Plot"""
     with tab:
@@ -215,8 +215,8 @@ def _render_tab3_beeswarm(
                         image_path = save_figure_to_temp(fig_beeswarm, "beeswarm")
                         
                         report = llm_generator.generate_global_report(
-                            store_nbr=store_nbr,
-                            item_nbr=item_nbr,
+                            store_id=store_id,
+                            item_id=item_id,
                             importance_df=importance_df,
                             category_summary=category_summary,
                             image_path=image_path,

@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
-from core.model import ModelManager, PredictionInput, PredictionOutput
-from api.dependencies import get_model_manager, get_feature_data
+from src.core.model import ModelManager, PredictionInput, PredictionOutput
+from src.api.dependencies import get_model_manager, get_feature_data
 import pandas as pd
+from src.config import COL_STORE_ID, COL_ITEM_ID
 
 router = APIRouter(prefix="/prediction", tags=["Prediction"])
 
@@ -9,7 +10,7 @@ router = APIRouter(prefix="/prediction", tags=["Prediction"])
 @router.get("/stores")
 async def get_stores(data: pd.DataFrame = Depends(get_feature_data)):
     """Trả về danh sách tất cả Store ID có trong dữ liệu."""
-    stores = sorted(data["store_nbr"].unique().tolist())
+    stores = sorted(data[COL_STORE_ID].unique().tolist())
     return {"stores": stores, "count": len(stores)}
 
 # 2. GET /items/{store_id}
@@ -17,11 +18,11 @@ async def get_stores(data: pd.DataFrame = Depends(get_feature_data)):
 async def get_items(store_id: int, data: pd.DataFrame = Depends(get_feature_data)):
     """Trả về danh sách Item ID bán tại Store cụ thể."""
     # Lọc store
-    store_data = data[data["store_nbr"] == store_id]
+    store_data = data[data[COL_STORE_ID] == store_id]
     if store_data.empty:
         raise HTTPException(404, detail=f"Store public ID {store_id} not found")
         
-    items = sorted(store_data["item_nbr"].unique().tolist())
+    items = sorted(store_data[COL_ITEM_ID].unique().tolist())
     return {"store_id": store_id, "items": items, "count": len(items)}
 
 

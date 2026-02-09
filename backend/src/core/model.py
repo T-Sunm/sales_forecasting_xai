@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel, Field, validator
 
-from config import LGBM_MODELS_PKL
+from src.config import LGBM_MODELS_PKL, COL_STORE_ID, COL_ITEM_ID
 
 
 # ==================== PYDANTIC MODELS ====================
@@ -96,44 +96,38 @@ class PredictionOutput(BaseModel):
 
 class ModelManager:
     """
-    Manages LightGBM models and prediction logic.
-    Separates business logic from UI layer.
+    Manages LightGBM model and prediction logic.
+    Uses a single global model with store_id/item_id as categorical features.
     """
     
     def __init__(self):
-        self.models_dict: Optional[Dict[Tuple[int, int], Any]] = None
+        self.model: Optional[Any] = None
         
     def load_models(self) -> bool:
         """
-        Load trained models from pickle file.
+        Load trained model from pickle file.
         
         Returns:
             bool: True if successful, False otherwise
         """
         try:
             with open(LGBM_MODELS_PKL, "rb") as file:
-                self.models_dict = pickle.load(file)
+                self.model = pickle.load(file)
             return True
         except FileNotFoundError:
             return False
-        except Exception as e:
-            # Log error here if logger is available
+        except Exception:
             return False
     
-    def get_model(self, store_id: int, item_id: int):
+    def get_model(self, store_id: int = None, item_id: int = None):
         """
-        Retrieve specific model for store-item pair.
+        Retrieve the global model.
+        store_id and item_id params kept for API compatibility.
         
-        Args:
-            store_id: Store identifier
-            item_id: Item identifier
-            
         Returns:
-            LightGBM model or None if not found
+            LightGBM model or None if not loaded
         """
-        if self.models_dict is None:
-            return None
-        return self.models_dict.get((store_id, item_id))
+        return self.model
     
     def prepare_input(
         self, 
@@ -203,8 +197,8 @@ class ModelManager:
         item_id: int,
         prediction_input: PredictionInput,
         feature_engineered_data: pd.DataFrame,
-        store_col: str = "store_nbr",
-        item_col: str = "item_nbr",
+        store_col: str = COL_STORE_ID,
+        item_col: str = COL_ITEM_ID,
         use_recursive: bool = True
     ) -> PredictionOutput:
         """

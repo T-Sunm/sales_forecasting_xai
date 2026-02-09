@@ -20,10 +20,18 @@ from processing.validator import TARGET_COL, get_feature_cols
 PARAMS_FILE = "../shared/params.yaml"
 
 
-def load_train_params():
+def load_train_params(best_params_path=None):
     with open(PARAMS_FILE, "r") as f:
         all_params = yaml.safe_load(f)
-    return all_params.get("train", {})
+    cfg = all_params.get("train", {})
+    
+    if best_params_path and os.path.exists(best_params_path):
+        with open(best_params_path, "r") as f:
+            best_params = json.load(f)
+        cfg.update(best_params)
+        print(f"Loaded best_params from {best_params_path}")
+    
+    return cfg
 
 
 def train_logic(args):
@@ -46,7 +54,7 @@ def train_logic(args):
     X_valid = df_valid[feature_cols + extra_features]
     y_valid = df_valid[TARGET_COL]
 
-    cfg = load_train_params()
+    cfg = load_train_params(args.best_params)
     params = {
         "objective": cfg.get("objective", "regression"),
         "metric": cfg.get("metric", "rmse"),
@@ -122,6 +130,7 @@ if __name__ == "__main__":
     parser.add_argument("--run-name", default="lgbm_baseline_global")
     parser.add_argument("--model-out", default="../shared/models/lgbm_baseline.pkl")
     parser.add_argument("--metrics-out", default="../shared/outputs/metrics.json")
+    parser.add_argument("--best-params", default=None)
     args = parser.parse_args()
 
     setup_mlflow()

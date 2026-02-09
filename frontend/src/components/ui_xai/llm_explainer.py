@@ -396,11 +396,11 @@ class SalesInsightGenerator:
         error_pct = 100 * error / actual_value if actual_value > 0 else 0
         
         text = f"""Ngày dự báo: {date}
-Doanh số thực tế: {actual_value:.1f} sản phẩm
-Doanh số dự báo: {predicted_value:.1f} sản phẩm
-Sai số: {error:+.1f} sản phẩm ({error_pct:+.1f}%)
+        Doanh số thực tế: {actual_value:.1f} sản phẩm
+        Doanh số dự báo: {predicted_value:.1f} sản phẩm
+        Sai số: {error:+.1f} sản phẩm ({error_pct:+.1f}%)
 
-"""
+        """
         
         # Increasing factors
         text += "Các yếu tố TĂNG dự báo:\n"
@@ -418,8 +418,8 @@ Sai số: {error:+.1f} sản phẩm ({error_pct:+.1f}%)
     
     def generate_global_report(
         self,
-        store_nbr: int,
-        item_nbr: int,
+        store_id: int,
+        item_id: int,
         importance_df: pd.DataFrame,
         category_summary: pd.DataFrame,
         image_path: Optional[Union[str, Path]] = None,
@@ -429,8 +429,8 @@ Sai số: {error:+.1f} sản phẩm ({error_pct:+.1f}%)
         Generate natural language report for global feature importance.
         
         Args:
-            store_nbr: Store ID
-            item_nbr: Item ID  
+            store_id: Store ID
+            item_id: Item ID  
             importance_df: Feature importance DataFrame
             category_summary: Category summary DataFrame
             image_path: Optional path to visualization image
@@ -457,8 +457,8 @@ Sai số: {error:+.1f} sản phẩm ({error_pct:+.1f}%)
         
         # Create base prompt using template
         base_prompt = PromptTemplates.GLOBAL_BASE.format(
-            store_nbr=store_nbr,
-            item_nbr=item_nbr,
+            store_nbr=store_id,
+            item_nbr=item_id,
             viz_context=viz_context,
             data_text=data_text,
             questions=questions
@@ -487,8 +487,8 @@ Sai số: {error:+.1f} sản phẩm ({error_pct:+.1f}%)
     
     def generate_local_explanation(
         self,
-        store_nbr: int,
-        item_nbr: int,
+        store_id: int,
+        item_id: int,
         date: str,
         actual_value: float,
         predicted_value: float,
@@ -500,8 +500,8 @@ Sai số: {error:+.1f} sản phẩm ({error_pct:+.1f}%)
         Generate natural language explanation for a specific prediction.
         
         Args:
-            store_nbr: Store ID
-            item_nbr: Item ID
+            store_id: Store ID
+            item_id: Item ID
             date: Prediction date
             actual_value: Actual sales
             predicted_value: Predicted sales
@@ -520,8 +520,8 @@ Sai số: {error:+.1f} sản phẩm ({error_pct:+.1f}%)
         
         # Create prompt using template
         base_prompt = PromptTemplates.LOCAL_BASE.format(
-            store_nbr=store_nbr,
-            item_nbr=item_nbr,
+            store_nbr=store_id,
+            item_nbr=item_id,
             data_text=data_text
         )
         
@@ -591,8 +591,8 @@ Sai số: {error:+.1f} sản phẩm ({error_pct:+.1f}%)
         feature_name: str,
         feature_stats: pd.Series,
         category: str,
-        store_nbr: Optional[int] = None,
-        item_nbr: Optional[int] = None,
+        store_id: Optional[int] = None,
+        item_id: Optional[int] = None,
         image_path: Optional[Union[str, Path]] = None
     ) -> str:
         """
@@ -602,8 +602,8 @@ Sai số: {error:+.1f} sản phẩm ({error_pct:+.1f}%)
             feature_name: Technical name of the feature
             feature_stats: Statistical summary (mean, std, min, max)
             category: Feature category
-            store_nbr: Store ID (optional)
-            item_nbr: Item ID (optional)
+            store_id: Store ID (optional)
+            item_id: Item ID (optional)
             image_path: Optional path to dependence plot image
         
         Returns:
@@ -626,8 +626,8 @@ Sai số: {error:+.1f} sản phẩm ({error_pct:+.1f}%)
         
         # Create context about store/item if provided
         context = ""
-        if store_nbr and item_nbr:
-            context = f"Phân tích cho Cửa hàng {store_nbr}, Sản phẩm {item_nbr}.\n\n"
+        if store_id and item_id:
+            context = f"Phân tích cho Cửa hàng {store_id}, Sản phẩm {item_id}.\n\n"
         
         # Create prompt using template
         base_prompt = PromptTemplates.DEPENDENCE_BASE.format(

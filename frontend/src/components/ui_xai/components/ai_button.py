@@ -54,8 +54,8 @@ def render_ai_analysis_button(
             generate_func=llm_generator.generate_global_report,
             title="🤖 Top Features Analysis",
             figure_prefix="top_features",
-            store_nbr=store_nbr,
-            item_nbr=item_nbr,
+            store_id=store_id,
+            item_id=item_id,
             importance_df=importance_df,
             category_summary=category_summary,
             tab_type="top_features"

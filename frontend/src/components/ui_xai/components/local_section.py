@@ -16,8 +16,8 @@ def display_local_explanations(
     X_sample,
     df_sample,
     feature_names,
-    store_nbr=None,
-    item_nbr=None,
+    store_id=None,
+    item_id=None,
     llm_generator=None,
     api_client=None
 ):
@@ -30,8 +30,8 @@ def display_local_explanations(
         X_sample: Feature data DataFrame
         df_sample: Original data with metadata
         feature_names: List of feature names
-        store_nbr: Store ID for LLM context
-        item_nbr: Item ID for LLM context
+        store_id: Store ID for LLM context
+        item_id: Item ID for LLM context
         llm_generator: SalesInsightGenerator instance
         api_client: APIClient instance (optional)
     """
@@ -66,7 +66,7 @@ def display_local_explanations(
         if st.button("🔍 Explain Prediction"):
             with st.spinner("Fetching explanation..."):
                 explanation = api_client.get_local_explanation(
-                    store_nbr, item_nbr, 
+                    store_id, item_id, 
                     date=target_date, 
                     top_n=10
                 )
@@ -225,8 +225,8 @@ def display_local_explanations(
             generate_func=llm_generator.generate_local_explanation,
             title="🤖 Prediction Analysis",
             figure_prefix="waterfall_explanation",
-            store_nbr=store_nbr,
-            item_nbr=item_nbr,
+            store_id=store_id,
+            item_id=item_id,
             date=sample_date_str,
             actual_value=actual_value,
             predicted_value=predicted_units,

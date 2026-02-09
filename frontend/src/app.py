@@ -5,11 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from services import get_api_client
-from utils.local_data_loader import (
-    load_data,
-    load_feature_engineered_data,
-    load_feature_stats,
-)
+
 from components.ui_builder.dashboard import historical_sales_view
 from components.ui_predictor.prediction import sales_prediction_view
 from components.ui_xai.xai_view import xai_explanation_view
@@ -66,24 +62,16 @@ def main():
     
     # Page logic
     if page == "Historical Sales Analysis":
-        # Direct SQL mode - no heavy CSV loading needed
         historical_sales_view()
         
     elif page == "Sales Prediction":
         check_backend_connection()
-        # Load data only when needed
-        data = load_data()
-        feature_stats = load_feature_stats()
-        feature_engineered_data = load_feature_engineered_data()
         api = get_api_client()
-        sales_prediction_view(data, api, feature_stats, feature_engineered_data)
+        sales_prediction_view(api)
         
     else:  # XAI Explanation
         check_backend_connection()
-        # Load data only when needed
-        data = load_data()
-        # XAI now uses Backend API for all SHAP computations
-        xai_explanation_view(data, None, None)
+        xai_explanation_view()
 
 
 if __name__ == "__main__":

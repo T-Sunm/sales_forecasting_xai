@@ -14,8 +14,8 @@ def plot_sales_forecast(
     fig, ax = plt.subplots(figsize=(12, 6))
 
     # Filter for specific store if provided
-    if store_id is not None and "store_nbr" in historical_data.columns:
-        plot_data = historical_data[historical_data["store_nbr"] == store_id].copy()
+    if store_id is not None and "store_id" in historical_data.columns:
+        plot_data = historical_data[historical_data["store_id"] == store_id].copy()
     else:
         plot_data = historical_data.copy()
 
@@ -92,7 +92,7 @@ def plot_sales_time_series(
 
     if "store_name" in filtered_data.columns and selected_store_name != "All Stores":
         ax.set_title(f"Daily Units - {selected_store_name}")
-    elif "store_nbr" in filtered_data.columns and selected_store != "All Stores":
+    elif "store_id" in filtered_data.columns and selected_store != "All Stores":
         ax.set_title(f"Daily Units - Store {selected_store}")
     else:
         ax.set_title("Daily Units - All Stores")
@@ -180,7 +180,7 @@ def plot_store_comparison(filtered_data, store_identifier="store"):
     return fig
 
 
-def plot_product_comparison(filtered_data, item_identifier="item_nbr"):
+def plot_product_comparison(filtered_data, item_identifier="item_id"):
     """Generate horizontal bar chart for top products by sales"""
     fig, ax = plt.subplots(figsize=(6, 6))
 
@@ -243,7 +243,7 @@ def plot_products_trend_comparison(filtered_data, selected_items):
     colors = plt.cm.tab10.colors
 
     for i, item in enumerate(selected_items):
-        item_data = filtered_data[filtered_data["item_nbr"] == item]
+        item_data = filtered_data[filtered_data["item_id"] == item]
         sales_by_date = item_data.groupby("date")["units"].sum()
         
         # Use simple color cycling
@@ -270,7 +270,7 @@ def plot_market_share_pie(filtered_data, selected_items):
     total_selected_sales = 0
     
     for item in selected_items:
-        sales = filtered_data[filtered_data["item_nbr"] == item]["units"].sum()
+        sales = filtered_data[filtered_data["item_id"] == item]["units"].sum()
         selected_sales[f"Product {item}"] = sales
         total_selected_sales += sales
     
@@ -317,7 +317,7 @@ def plot_growth_rate_comparison(filtered_data, selected_items):
     items = []
     
     for item in selected_items:
-        item_data = filtered_data[filtered_data["item_nbr"] == item]
+        item_data = filtered_data[filtered_data["item_id"] == item]
         
         first_half = item_data[item_data["date"] <= mid_date]["units"].sum()
         second_half = item_data[item_data["date"] > mid_date]["units"].sum()
@@ -347,7 +347,7 @@ def plot_growth_rate_comparison(filtered_data, selected_items):
 def plot_seasonality_heatmap(filtered_data, selected_items):
     """Generate heatmap showing sales intensity by Day of Week for selected products"""
     # Filter for selected items only
-    df = filtered_data[filtered_data["item_nbr"].isin(selected_items)].copy()
+    df = filtered_data[filtered_data["item_id"].isin(selected_items)].copy()
     
     if df.empty:
         fig, ax = plt.subplots()
@@ -361,7 +361,7 @@ def plot_seasonality_heatmap(filtered_data, selected_items):
     # Group by Product and Day
     pivot_table = df.pivot_table(
         values='units', 
-        index='item_nbr', 
+        index='item_id', 
         columns='day_of_week', 
         aggfunc='mean',
         observed=False

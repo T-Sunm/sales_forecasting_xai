@@ -7,6 +7,16 @@ Interactive dashboard for Sales Forecasting visualization and XAI insights.
 - **XAI Dashboard**: Explanations for predictions using SHAP plots.
 - **LLM Integration**: Natural language summary of model insights.
 
+## Prerequisites
+
+Frontend requires **PostgreSQL** for the Historical Sales dashboard.
+
+Start PostgreSQL container before running the app:
+```bash
+cd ../data_platform/infra/postgres
+docker-compose up -d
+```
+
 ## Quick Start
 
 ### 1. Install Dependencies
@@ -16,6 +26,7 @@ uv sync
 
 ### 2. Run App
 ```bash
-streamlit run src/app.py
+uv run streamlit run src/app.py
 ```
 The application will open in your default browser at `http://localhost:8501`.
+

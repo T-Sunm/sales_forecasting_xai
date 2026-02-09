@@ -4,14 +4,13 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 import pandas as pd
-import pyarrow.feather as feather
-from config import (
+from src.config import (
     API_NAME, API_VERSION, API_HOST, API_PORT, 
-    CORS_ORIGINS, DEBUG_MODE, FEATURE_ENGINEERED_FEATHER
+    CORS_ORIGINS, DEBUG_MODE, TRAIN_DATA_PATH
 )
-from utils.logger import setup_logging, APILoggingMiddleware
-from core.model import ModelManager
-from api.routers import health, prediction, xai, models
+from src.utils.logger import setup_logging, APILoggingMiddleware
+from src.core.model import ModelManager
+from src.api.routers import health, prediction, xai, models, data, analytics
 
 # 1. Setup Logging
 logger = setup_logging()
@@ -27,7 +26,7 @@ async def lifespan(app: FastAPI):
     success = model_manager.load_models()
     
     if success:
-        logger.info(f"✅ Models loaded successfully. Available keys: {len(model_manager.models_dict) if model_manager.models_dict else 0}")
+        logger.info("✅ Model loaded successfully.")
     else:
         logger.error("❌ Failed to load models on startup. API will assume no models available.")
         
@@ -37,13 +36,12 @@ async def lifespan(app: FastAPI):
     # Load Feature Data (For prediction context)
     logger.info("Loading feature engineered data...")
     try:
-        # Check if file exists first to avoid confusing arrow errors
-        if FEATURE_ENGINEERED_FEATHER.exists():
-            feature_data = feather.read_feather(FEATURE_ENGINEERED_FEATHER)
+        if TRAIN_DATA_PATH.exists():
+            feature_data = pd.read_parquet(TRAIN_DATA_PATH)
             app.state.feature_data = feature_data
             logger.info(f"✅ Feature data loaded successfully. Shape: {feature_data.shape}")
         else:
-            logger.error(f"❌ Feature file not found at: {FEATURE_ENGINEERED_FEATHER}")
+            logger.error(f"❌ Feature file not found at: {TRAIN_DATA_PATH}")
             app.state.feature_data = None
     except Exception as e:
         logger.error(f"❌ Failed to load feature data: {str(e)}")
@@ -91,6 +89,8 @@ app.include_router(health.router)
 app.include_router(models.router)
 app.include_router(prediction.router)
 app.include_router(xai.router)
+app.include_router(data.router)
+app.include_router(analytics.router)
 
 # 7. Root Endpoint
 @app.get("/", tags=["General"])

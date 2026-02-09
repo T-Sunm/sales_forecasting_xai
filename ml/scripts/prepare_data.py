@@ -1,11 +1,17 @@
 import os
+from pathlib import Path
 
 import pandas as pd
 import yaml
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
 
-load_dotenv("../.env")
+# Project paths (absolute, calculated from script location)
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parent.parent  # ml/scripts -> ml -> project_root
+SHARED_DIR = PROJECT_ROOT / "shared"
+
+load_dotenv(PROJECT_ROOT / ".env")
 
 PG_USER = os.getenv("POSTGRES_USER", "postgres")
 PG_PASS = os.getenv("POSTGRES_PASSWORD", "changeme")
@@ -13,9 +19,9 @@ PG_HOST = os.getenv("POSTGRES_HOST", "localhost")
 PG_PORT = os.getenv("POSTGRES_PORT", "5432")
 PG_DB = "sales_forecasting"
 
-OUTPUT_DIR = "../shared/data/processed"
-KAGGLE_TEST_CSV = "../shared/data/data_raw/test.csv"
-PARAMS_FILE = "../shared/params.yaml"
+OUTPUT_DIR = SHARED_DIR / "data" / "processed"
+KAGGLE_TEST_CSV = SHARED_DIR / "data" / "data_raw" / "test.csv"
+PARAMS_FILE = SHARED_DIR / "params.yaml"
 
 
 def load_cutoff_date():
@@ -79,11 +85,11 @@ def prepare_data():
 
     print(f"Final Splits: Train({len(df_train)}) | Valid({len(df_valid)}) | KaggleTest({len(df_test)})")
 
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     print(f"Saving parquet files to {OUTPUT_DIR}...")
-    df_train.to_parquet(f"{OUTPUT_DIR}/train.parquet", index=False)
-    df_valid.to_parquet(f"{OUTPUT_DIR}/valid.parquet", index=False)
-    df_test.to_parquet(f"{OUTPUT_DIR}/test.parquet", index=False)
+    df_train.to_parquet(OUTPUT_DIR / "train.parquet", index=False)
+    df_valid.to_parquet(OUTPUT_DIR / "valid.parquet", index=False)
+    df_test.to_parquet(OUTPUT_DIR / "test.parquet", index=False)
 
     print("Data preparation complete.")
 

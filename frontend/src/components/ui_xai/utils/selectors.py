@@ -16,7 +16,7 @@ def create_store_item_selector(models_list):
         models_list: List of dicts [{'store_id': 1, 'item_id': 2}, ...] from API
     
     Returns:
-        tuple: (store_nbr, item_nbr)
+        tuple: (store_id, item_id)
     """
     st.sidebar.header("🎯 Select Store & Item")
     
@@ -28,7 +28,7 @@ def create_store_item_selector(models_list):
     available_stores = sorted(list(set(m['store_id'] for m in models_list)))
     
     # Store selection
-    store_nbr = st.sidebar.selectbox(
+    store_id = st.sidebar.selectbox(
         "Store",
         available_stores,
         help="Select a store to analyze"
@@ -37,21 +37,21 @@ def create_store_item_selector(models_list):
     # Get available items for selected store
     available_items = sorted([
         m['item_id'] for m in models_list 
-        if m['store_id'] == store_nbr
+        if m['store_id'] == store_id
     ])
     
     if len(available_items) == 0:
-        st.sidebar.warning(f"No items available for Store {store_nbr}")
-        return store_nbr, None
+        st.sidebar.warning(f"No items available for Store {store_id}")
+        return store_id, None
     
     # Item selection
-    item_nbr = st.sidebar.selectbox(
+    item_id = st.sidebar.selectbox(
         "Item",
         available_items,
         help="Select an item to analyze"
     )
     
-    return store_nbr, item_nbr
+    return store_id, item_id
 
 
 def init_llm_generator():
