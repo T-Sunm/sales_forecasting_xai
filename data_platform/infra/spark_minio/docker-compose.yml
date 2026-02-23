@@ -65,6 +65,34 @@ services:
       - ./minio_data:/data
     networks:
       - data_network
+
+  spark-thrift:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: spark-thrift
+    user: root
+    command: >
+      /opt/spark/bin/spark-submit
+      --class org.apache.spark.sql.hive.thriftserver.HiveThriftServer2
+      --master spark://spark-master:7077
+      --hiveconf hive.server2.thrift.port=10001
+      --hiveconf hive.server2.thrift.bind.host=0.0.0.0
+      /opt/spark/jars/spark-hive-thriftserver_2.12-3.5.3.jar
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    ports:
+      - "10001:10001"
+    environment:
+      - SPARK_PUBLIC_DNS=localhost
+      - S3_ENDPOINT=http://minio:9000
+    volumes:
+      - ./spark_conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
+      - ./data:/opt/spark/data
+      - ../../spark/jobs:/opt/spark/jobs
+    networks:
+      - data_network
 networks:
   data_network:
     external: true

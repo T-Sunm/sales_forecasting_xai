@@ -7,6 +7,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     git \
     openjdk-17-jre-headless \
+    libsasl2-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -24,7 +25,7 @@ USER airflow
 
 # 4. Setup dbt in a virtual environment
 RUN python -m venv /opt/airflow/dbt_venv && \
-    /opt/airflow/dbt_venv/bin/pip install --no-cache-dir dbt-postgres
+    /opt/airflow/dbt_venv/bin/pip install --no-cache-dir "dbt-spark[PyHive]"
 
 # 5. Install Python dependencies
 # - Copy requirements.txt first

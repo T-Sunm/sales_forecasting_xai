@@ -17,24 +17,31 @@ PG_PASS = os.environ.get("PG_PASS", "changeme")
 
 TARGET_DB = os.environ.get("PG_DB", "sales_forecasting")
 ADMIN_DB = os.environ.get("PG_ADMIN_DB", "postgres")
+EXTRA_DATABASES = ["nessie"]
+
+
+def create_database_if_not_exists(cur, dbname):
+    cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (dbname,))
+    if cur.fetchone() is None:
+        logger.info("Creating database: %s", dbname)
+        cur.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(dbname)))
+    else:
+        logger.info("Database already exists: %s", dbname)
 
 
 def ensure_database():
-    logger.info("Ensure database exists. target=%s admin_db=%s host=%s", TARGET_DB, ADMIN_DB, PG_HOST)
+    all_dbs = [TARGET_DB] + EXTRA_DATABASES
+    logger.info("Ensuring databases exist: %s", all_dbs)
 
     conn = psycopg2.connect(
         host=PG_HOST, port=PG_PORT, dbname=ADMIN_DB,
         user=PG_USER, password=PG_PASS
     )
-    conn.autocommit = True  # CREATE DATABASE cần autocommit, không chạy trong transaction block [web:160]
+    conn.autocommit = True
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (TARGET_DB,))
-            if cur.fetchone() is None:
-                logger.info("Creating database: %s", TARGET_DB)
-                cur.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(TARGET_DB)))
-            else:
-                logger.info("Database already exists: %s", TARGET_DB)
+            for dbname in all_dbs:
+                create_database_if_not_exists(cur, dbname)
     finally:
         conn.close()
 
@@ -60,7 +67,7 @@ def main():
     try:
         ensure_database()
         ensure_schemas()
-        logger.info("Database and schemas are ready.")
+        logger.info("All databases and schemas are ready.")
     except Exception:
         logger.exception("Initialization failed.")
 
