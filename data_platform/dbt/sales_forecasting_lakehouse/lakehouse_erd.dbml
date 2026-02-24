@@ -1,0 +1,98 @@
+Table dim_date {
+  date date
+  year int
+  month int
+  day int
+  day_of_week int
+  quarter int
+  is_weekend int
+  is_holiday int
+  is_blackfriday int
+  season_winter int
+  season_spring int
+  season_summer int
+  season_fall int
+}
+
+Table dim_item {
+  item_id int
+}
+
+Table dim_store {
+  store_id int
+  station_id int
+}
+
+Table dim_weather_profile {
+  weather_profile_key string
+  is_ra int
+  is_sn int
+  is_fg int
+  is_br int
+  is_ts int
+  is_hz int
+  is_dz int
+  is_sq int
+  is_fz int
+  is_vc int
+}
+
+Table fact_sales_item_daily {
+  date date
+  store_id int
+  item_id int
+  units int
+  log_units double
+  logunits_lag_1 double
+  logunits_lag_2 double
+  logunits_lag_3 double
+  logunits_lag_4 double
+  logunits_lag_5 double
+  logunits_lag_6 double
+  logunits_lag_7 double
+  logunits_lag_14 double
+  logunits_lag_21 double
+  logunits_lag_28 double
+  roll_avg_7d double
+  roll_min_7d double
+  roll_max_7d double
+  roll_std_7d double
+  roll_avg_14d double
+  roll_min_14d double
+  roll_max_14d double
+  roll_std_14d double
+  roll_avg_28d double
+  roll_min_28d double
+  roll_max_28d double
+  roll_std_28d double
+  ewma7_a05 double
+  ewma7_a075 double
+  store_sum_7d double
+  store_mean_7d double
+  item_sum_7d double
+  item_mean_7d double
+}
+
+Table fact_store_weather_daily {
+  date date
+  store_id int
+  station_id int
+  weather_profile_key string
+  tmax double
+  tmin double
+  tavg double
+  dewpoint double
+  wetbulb double
+  preciptotal double
+  snowfall double
+  resultspeed double
+  resultdir double
+  avgspeed double
+}
+
+Ref: fact_sales_item_daily.date > dim_date.date
+Ref: fact_sales_item_daily.store_id > dim_store.store_id
+Ref: fact_sales_item_daily.item_id > dim_item.item_id
+Ref: fact_store_weather_daily.date > dim_date.date
+Ref: fact_store_weather_daily.store_id > dim_store.store_id
+Ref: fact_store_weather_daily.weather_profile_key > dim_weather_profile.weather_profile_key

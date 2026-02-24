@@ -40,7 +40,7 @@ services:
     ports:
       - "8082:8081"
     environment:
-      - SPARK_WORKER_CORES=1
+      - SPARK_WORKER_CORES=2
       - SPARK_WORKER_MEMORY=4G
       - SPARK_PUBLIC_DNS=localhost
       - S3_ENDPOINT=http://minio:9000
@@ -76,6 +76,7 @@ services:
       /opt/spark/bin/spark-submit
       --class org.apache.spark.sql.hive.thriftserver.HiveThriftServer2
       --master spark://spark-master:7077
+      --total-executor-cores 1
       --hiveconf hive.server2.thrift.port=10001
       --hiveconf hive.server2.thrift.bind.host=0.0.0.0
       /opt/spark/jars/spark-hive-thriftserver_2.12-3.5.3.jar

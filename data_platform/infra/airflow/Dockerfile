@@ -19,6 +19,8 @@ RUN mkdir -p /opt/airflow/jars && \
     curl -L -o /opt/airflow/jars/hadoop-aws-3.3.4.jar https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar && \
     curl -L -o /opt/airflow/jars/aws-java-sdk-bundle-1.12.262.jar https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar && \
     curl -L -o /opt/airflow/jars/postgresql-42.7.0.jar https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.0/postgresql-42.7.0.jar && \
+    curl -L -o /opt/airflow/jars/iceberg-spark-runtime-3.5_2.12-1.10.1.jar https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-spark-runtime-3.5_2.12/1.10.1/iceberg-spark-runtime-3.5_2.12-1.10.1.jar && \
+    curl -L -o /opt/airflow/jars/nessie-spark-extensions-3.5_2.12-0.107.2.jar https://repo1.maven.org/maven2/org/projectnessie/nessie-integrations/nessie-spark-extensions-3.5_2.12/0.107.2/nessie-spark-extensions-3.5_2.12-0.107.2.jar && \
     chown -R airflow:root /opt/airflow/jars
 
 USER airflow

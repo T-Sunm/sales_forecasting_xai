@@ -1,62 +1,50 @@
+"""
+Consumer: Lakehouse Pipeline (dbt)
+Layer   : Staging → Intermediate → Mart
+Trigger : DS_RAW_PARQUET_READY + DS_EWMA_FEATURES_READY
+Output  : DS_LAKEHOUSE_MART_READY
+Mô tả   : Chạy toàn bộ dbt project sales_forecasting_lakehouse qua Cosmos DbtTaskGroup.
+          Kết quả là Iceberg tables trong Nessie catalog:
+            - nessie.default.*  : staging + intermediate
+            - nessie.analytics.* : mart_sales_forecast
+"""
 from airflow import DAG
-from airflow.decorators import task
-from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
+from airflow.operators.empty import EmptyOperator
+from cosmos import DbtTaskGroup, ProjectConfig, ProfileConfig, ExecutionConfig, RenderConfig
+from cosmos.constants import TestBehavior
 from pendulum import datetime
 import sys, os
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from datasets import (
-    DS_INTER_SALES, DS_INTER_WEATHER, DS_MART_FEATURES,
-    URI_INTER_SALES, URI_MART_FEATURES
-)
+from datasets import DS_RAW_PARQUET_READY, DS_EWMA_FEATURES_READY, DS_LAKEHOUSE_MART_READY
 
-
-def attach_metadata(context, result=None):
-    logical_date = context.get("logical_date")
-    run_date = context.get("ds") or (logical_date.to_date_string() if logical_date else None)
-    
-    context["outlet_events"][DS_MART_FEATURES].extra = {
-        "run_date": context["params"].get("run_date", run_date),
-        "source": "spark_join_features"
-    }
-
-
-@task
-def resolve_run_date(triggering_asset_events=None, **context):
-    events = triggering_asset_events or {}
-    
-    for asset, asset_events in events.items():
-        # Kiểm tra URI của asset để tìm đúng nguồn sales
-        if getattr(asset, "uri", None) == URI_INTER_SALES and asset_events:
-            run_date = (asset_events[-1].extra or {}).get("run_date")
-            if run_date:
-                return run_date
-
-    return context["ds"]
+DBT_PROJECT_PATH    = "/opt/airflow/dags/dbt/sales_forecasting_lakehouse"
+DBT_EXECUTABLE_PATH = "/opt/airflow/dbt_venv/bin/dbt"
 
 
 with DAG(
-    dag_id="consumer_feature_engineering",
+    dag_id="consumer_lakehouse_pipeline",
     start_date=datetime(2024, 1, 1),
-    schedule=[DS_INTER_SALES, DS_INTER_WEATHER],
+    schedule=[DS_RAW_PARQUET_READY, DS_EWMA_FEATURES_READY],
     catchup=False,
-    tags=["layer:mart"],
+    tags=["layer:lakehouse", "domain:all", "tool:dbt"],
 ) as dag:
 
-    target_date = resolve_run_date()
-
-    SparkSubmitOperator(
-        task_id="spark_join_features",
-        application="/opt/spark/jobs/intermediate/join_features_pipeline.py",
-        conn_id="spark_default",
-        properties_file="/opt/spark/conf/spark-defaults.conf",
-        application_args=["--date", target_date],
-        outlets=[DS_MART_FEATURES],
-        post_execute=attach_metadata,
-        jars="/opt/airflow/jars/hadoop-aws-3.3.4.jar,/opt/airflow/jars/aws-java-sdk-bundle-1.12.262.jar,/opt/airflow/jars/postgresql-42.7.0.jar",
-        conf={
-            "spark.submit.deployMode": "client",
-            "spark.driver.host": "airflow-worker",
-            "spark.driver.bindAddress": "0.0.0.0",
-        },
+    dbt_lakehouse = DbtTaskGroup(
+        group_id="dbt_sales_forecasting_lakehouse",
+        project_config=ProjectConfig(DBT_PROJECT_PATH),
+        profile_config=ProfileConfig(
+            profile_name="sales_forecasting_lakehouse",
+            target_name="dev",
+            profiles_yml_filepath=f"{DBT_PROJECT_PATH}/profiles.yml",
+        ),
+        execution_config=ExecutionConfig(dbt_executable_path=DBT_EXECUTABLE_PATH),
+        render_config=RenderConfig(test_behavior=TestBehavior.AFTER_ALL),
     )
+
+    lakehouse_mart_ready = EmptyOperator(
+        task_id="lakehouse_mart_ready",
+        outlets=[DS_LAKEHOUSE_MART_READY],
+    )
+
+    dbt_lakehouse >> lakehouse_mart_ready

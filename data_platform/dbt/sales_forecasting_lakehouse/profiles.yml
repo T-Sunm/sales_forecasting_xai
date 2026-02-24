@@ -9,3 +9,11 @@ sales_forecasting_lakehouse:
       schema: analytics
       threads: 4
       connect_retries: 3
+    local:
+      type: spark
+      method: thrift
+      host: localhost
+      port: 10001
+      schema: analytics
+      threads: 4
+      connect_retries: 3

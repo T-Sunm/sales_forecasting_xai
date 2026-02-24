@@ -3,12 +3,11 @@ try:
 except ImportError:
     from airflow.datasets import Dataset as Asset
 
-URI_STG_DATA = "s3://datalake/staging/ready"
-URI_INTER_SALES = "s3://datalake/intermediate/sales"
-URI_INTER_WEATHER = "s3://datalake/intermediate/weather"
-URI_MART_FEATURES = "s3://datalake/mart/features"
+# URI đại diện cho checkpoint của từng layer trong pipeline
+URI_RAW_PARQUET_READY = "s3://datalake/staging/parquet"          # sau ingest_raw_to_parquet
+URI_EWMA_FEATURES_READY = "s3://datalake/intermediate/int_sales_with_ewma"  # sau EWMA Spark job
+URI_LAKEHOUSE_MART_READY = "nessie://analytics/mart_sales_forecast"          # sau dbt run xong
 
-DS_STG_DATA = Asset(URI_STG_DATA)
-DS_INTER_SALES = Asset(URI_INTER_SALES)
-DS_INTER_WEATHER = Asset(URI_INTER_WEATHER)
-DS_MART_FEATURES = Asset(URI_MART_FEATURES)
+DS_RAW_PARQUET_READY  = Asset(URI_RAW_PARQUET_READY)
+DS_EWMA_FEATURES_READY = Asset(URI_EWMA_FEATURES_READY)
+DS_LAKEHOUSE_MART_READY = Asset(URI_LAKEHOUSE_MART_READY)
