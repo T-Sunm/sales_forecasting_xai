@@ -16,12 +16,10 @@ clean-targets:
 models:
   sales_forecasting_lakehouse:
     staging:
-      +materialized: table
-      +file_format: iceberg
+      +materialized: view
       +schema: default
     intermediate:
-      +materialized: table
-      +file_format: iceberg
+      +materialized: view
       +schema: default
     marts:
       +materialized: table
