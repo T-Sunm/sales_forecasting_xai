@@ -99,19 +99,6 @@ uv run mlflow run . -e tune --env-manager local
 uv run mlflow run . -e train --env-manager local
 ```
 
-### Option C: Standalone Scripts
-
-If you need to debug a specific script and control arguments explicitly:
-
-```fish
-cd ml
-uv run python -m scripts.tune \
-  --n-trials 10 \
-  --study-name "debug_study" \
-  --train-path ../shared/data/processed/train.parquet \
-  --valid-path ../shared/data/processed/valid.parquet
-```
-
 ---
 
 ## Integration Points
