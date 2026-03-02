@@ -1,242 +1,129 @@
-# Sales Forecasting with Explainable AI (XAI)
+# Sales Forecasting XAI
 
 ## Overview
 
-**Sales Forecasting with Explainable AI (XAI)** is a complete end-to-end MLOps system designed to leverage machine learning for store-level sales forecasting. Built using **Python, LightGBM, SHAP, Optuna, DVC, MLflow, Airflow, Spark, and Streamlit**, this project combines robust data engineering pipelines with advanced ML workflows to ensure reproducibility, scalability, and interpretability.
+This repository hosts an end-to-end Walmart sales forecasting system combining a modern Lakehouse architecture with a comprehensive MLOps pipeline. The data platform leverages **MinIO** as the object storage, **Apache Iceberg** as the open table format, and **Nessie** for Git-like catalog versioning. Data ingestion and heavy feature engineering (such as Exponentially Weighted Moving Averages) are processed by **Apache Spark**, while **dbt** and **Apache Airflow** orchestrate resilient SQL transformations and pipeline scheduling. On the Machine Learning side, the pipeline utilizes **DVC** for data and artifact versioning, **MLflow** for experiment tracking, and **Optuna** for automated hyperparameter tuning. Finally, model predictions and Explainable AI (XAI) insights are served through a high-performance **FastAPI** backend and visualized in a **Streamlit** interactive dashboard.
 
-## Key Features
+## Architecture
 
-- **Advanced MLOps Pipeline:**
-  - **DVC:** Data versioning and pipeline orchestration (Prepare -> Tune -> Train -> Evaluate).
-  - **MLflow:** Experiment tracking (metrics, params) and Model Registry.
-  - **Optuna:** Hyperparameter optimization with best params handoff to training.
+![Architecture Diagram](./assets/main.png)
 
-- **Data Engineering Layer:**
-  - Uses Spark for big data processing and DBT for data transformation in the warehouse/lakehouse.
+## Repository Map
 
-- **Explainable AI:**
-  - SHAP values integration for transparent model predictions.
-
-## Architecture & Tech Stack
-
-### 1. Technology Stack
-
-| Component | Technology | Role |
-|-----------|------------|------|
-| **Data Lake** | MinIO | S3-compatible storage: Data Lake, DVC remote, MLflow artifacts. |
-| **Data Processing** | Apache Spark | Distributed ETL and feature engineering. |
-| **Data Warehouse** | PostgreSQL | DWH for marts + MLflow backend store. |
-| **Transformation** | DBT | SQL-based data transformations on PostgreSQL. |
-| **Orchestration** | Apache Airflow | Data pipeline scheduling and monitoring. |
-| **Pipeline Versioning** | DVC | Reproducibility, versioning data and ML pipelines. |
-| **ML Platform** | MLflow | Experiment tracking and Model Registry. |
-| **Hyperparameter Tuning** | Optuna | Automated hyperparameter optimization. |
-| **ML Core** | LightGBM, Scikit-learn | Gradient boosting models for forecasting. |
-| **Explainability** | SHAP | Model interpretation and feature importance. |
-| **Backend API** | FastAPI | Model serving and inference endpoints. |
-| **Frontend** | Streamlit | Dashboard and visualization interface. |
-
-### 2. Data Architecture
-
-The data flows through a multi-layer architecture to ensure quality and usability:
-
-- **Raw Layer (Bronze):** Original data ingested from external sources (Kaggle), stored in MinIO.
-- **Staging Layer (Silver):** Cleaned and standardized data, processed by Spark, stored in MinIO/Postgres.
-- **Intermediate Layer:** Data with business logic applied, joins between tables, prepared for final aggregation.
-- **Marts Layer (Gold):** Final, aggregated tables optimized for analytics and ML modeling (e.g., `fact_sales`, `dim_store`).
-
-### 3. Serving Architecture
-
-The system uses a decoupled client-server architecture for scalability:
-
-- **Model Registry:** Trained models are versioned and stored in MLflow.
-- **Backend (FastAPI):**
-    - Loads the best model from MLflow at startup.
-    - Exposes REST endpoints for `prediction`, `health`, and `xai` (explanations).
-    - Handles data validation using Pydantic schemas.
-- **Frontend (Streamlit):**
-    - Consumes the Backend APIs to fetch predictions and SHAP values.
-    - Renders interactive charts and natural language insights for end-users.
-
-### 4. MLOps Workflow Integration
-
-1.  **DVC (Data Version Control):**
-    -   Manages the DAG (prepare -> tune -> train -> evaluate).
-    -   Tracks inputs (data) and outputs (models, metrics).
-    -   Ensures reproducibility by locking dependency versions.
-
-2.  **MLflow:**
-    -   **Experiment Tracking:** Logs all parameters, metrics, and artifacts during training.
-    -   **Model Registry:** Acts as the *Source of Truth* for deployable models.
-
-3.  **Optuna:**
-    -   Performs automated hyperparameter tuning.
-    -   Outputs `best_params.json` which is automatically picked up by the training stage.
+| Module | Role | Link |
+|---|---|---|
+| `data_platform/` | Lakehouse infrastructure & orchestration pipelines | [Read](./data_platform/README.md) |
+| ├── `infra/` | Docker services & network overview | [Read](./data_platform/infra/README.md) |
+| │ ├── `spark_minio/` | Spark cluster, MinIO storage, Iceberg configuration | [Read](./data_platform/infra/spark_minio/README.md) |
+| │ ├── `nessie/` | Nessie Catalog for Iceberg | [Read](./data_platform/infra/nessie/README.md) |
+| │ ├── `airflow/` | Airflow orchestration (CeleryExecutor) | [Read](./data_platform/infra/airflow/README.md) |
+| │ └── `postgres/` | Airflow metadata DB & Nessie JDBC backend | [Read](./data_platform/infra/postgres/README.md) |
+| ├── `dbt/` | dbt data models (Lakehouse vs Warehouse) | [Read](./data_platform/dbt/README.md) |
+| └── `spark/` | PySpark ingestion & specific feature engineering jobs | [Read](./data_platform/spark/README.md) |
+| `ml/` | ML training algorithms, Optuna tuning, MLflow tracking | [Read](./ml/README.md) |
+| `shared/` | DVC pipeline execution & shared artifacts | [Read](./shared/README.md) |
+| `backend/` | FastAPI REST API for predictions and XAI | [Read](./backend/README.md) |
+| `frontend/` | Streamlit interactive UI & dashboards | [Read](./frontend/README.md) |
 
 ## Project Structure
 
-```bash
+```text
 sales_forecasting_xai/
-│
-├── .env / example.env              # Environment variables
-├── .gitignore                      # Git ignore rules
-├── .python-version                 # Python version
-├── environment.yml                 # Conda environment
-├── README.md                       # Project documentation
-│
-├── ml/                             # Core ML Module (MLflow Project)
-│   ├── MLproject                   # MLflow entry points definition
-│   ├── pyproject.toml              # ML dependencies (uv)
-│   ├── uv.lock
-│   ├── README.md
-│   │
-│   ├── scripts/                    # MLflow entry points
-│   │   ├── prepare_data.py         # Data preparation
-│   │   ├── train.py                # Model training
-│   │   └── tune.py                 # Hyperparameter tuning (Optuna)
-│   │
-│   ├── tuning/                     # Optuna tuning logic
-│   │   └── objective.py
-│   │
-│   ├── processing/                 # Data processing
-│   │   └── validator.py
-│   │
-│   ├── utils/                      # Shared utilities
-│   │   └── mlflow_utils.py
-│   │
-│   └── outputs/tuning/             # Tuning results (best_params.json)
-│
-├── data_platform/                  # Data Engineering Layer
-│   ├── README.md
-│   ├── pyproject.toml
-│   │
-│   ├── infra/                      # Infrastructure (Docker)
-│   │   ├── airflow/                # Apache Airflow
-│   │   │   ├── docker-compose.yaml
-│   │   │   ├── Dockerfile
-│   │   │   └── dags/
-│   │   │       ├── producers/      # Data ingestion DAGs
-│   │   │       └── consumers/      # Data consumption DAGs
-│   │   │
-│   │   ├── spark_minio/            # Spark + MinIO
-│   │   │   ├── docker-compose.yml
-│   │   │   └── Dockerfile
-│   │   │
-│   │   ├── postgres/               # PostgreSQL Data Warehouse
-│   │   │   └── docker-compose.yml
-│   │   │
-│   │   ├── mlflow/                 # MLflow Tracking Server
-│   │
-│   ├── spark/                      # Spark Jobs
-│   │   ├── configs/
-│   │   └── jobs/
-│   │       ├── staging/            # Raw -> Staging
-│   │       ├── intermediate/       # Staging -> Intermediate
-│   │       └── load_to_postgres.py
-│   │
-│   └── dbt/                        # DBT Transformations
-│       ├── sales_forecasting/      # Lakehouse Project
-│       │   ├── macros/
-│       │   └── models/
-│       │       ├── staging/
-│       │       ├── intermediate/
-│       │       └── marts/
-│       │
-│       └── sales_forecasting_warehouse/  # PostgreSQL Project
-│
-├── backend/                        # FastAPI Application
-│   ├── pyproject.toml
-│   ├── run.py
-│   │
-│   └── src/
-│       ├── api/
-│       │   ├── main.py
-│       │   └── routers/
-│       │       ├── health.py
-│       │       ├── models.py
-│       │       ├── prediction.py
-│       │       └── xai.py
-│       │
-│       ├── core/                   # Business logic
-│       │   ├── model.py
-│       │   ├── forecasting.py
-│       │   └── xai_explainer.py
-│       │
-│       └── data_loader/
-│
-├── frontend/                       # Streamlit Application
-│   ├── pyproject.toml
-│   │
-│   └── src/
-│       ├── app.py
-│       │
-│       ├── components/
-│       │   ├── ui_builder/
-│       │   ├── ui_predictor/
-│       │   └── ui_xai/             # XAI Dashboard
-│       │       ├── shap_plots.py
-│       │       ├── explainer.py
-│       │       └── llm_explainer.py
-│       │
-│       └── services/
-│           └── api_client.py
-│
-└── shared/                         # Shared Resources
-    ├── notebooks/                  # Jupyter Notebooks
-    │   └── wallmart_data/          # Walmart sales analysis
-    │       ├── 01_preprocessing.ipynb
-    │       ├── 02_EDA.ipynb
-    │       ├── 03_feature_engineering.ipynb
-    │       ├── 04_modelling_*.ipynb
-    │       └── 05_explain_model.ipynb
-    │
-    ├── data/                       # Shared data files
-    │   ├── processed/              # ML-ready data (output of prepare_data.py)
-    │   │   ├── train.parquet
-    │   │   ├── valid.parquet
-    │   │   └── test.parquet
-    │   └── data_raw/               # Raw Kaggle data
-    │
-    └── utils/
+├── backend/                # FastAPI backend & routes (prediction, xai)
+├── data_platform/          # Core lakehouse, orchestration & data transformation
+│   ├── dbt/                # SQL transformation models
+│   ├── infra/              # Containerized infrastructure services
+│   ├── pipelines/          # Airflow pipelines placeholder
+│   └── spark/              # Spark job definitions & configs
+├── frontend/               # Streamlit application
+├── ml/                     # ML modeling, training (LightGBM) & Optuna pipelines
+└── shared/                 # DVC stages (dvc.yaml), parameters (params.yaml)
 ```
 
-## Quick Start 🚀
+## Quickstart (Local/Dev)
 
-To get started with the project, follow these steps:
+### Assumptions & Prerequisites
 
-### 1. Global Setup
+*   **Docker & Docker Compose** are installed and running.
+*   **Python 3.10+** and the **`uv`** package manager are installed.
+*   **DVC** is available globally or within your python environment.
+*   The following ports must be free to use: `9000`, `9001` (MinIO), `5432` (Postgres), `19120` (Nessie), `7077` (Spark), `8080` (Airflow), `5000` (MLflow), `8000` (FastAPI), `8501` (Streamlit).
+*   An external Docker network named `data_platform_net` must be created before launching the services.
 
-Create the environment file used by all services:
+### Minimum Happy Path
 
-```bash
-cp example.env .env
-# Open .env and adjust variables as needed
+The container cluster must be started in a specific sequence to satisfy runtime dependencies: **PostgreSQL → Nessie → Spark & MinIO → Airflow**. Once the infrastructure is completely ready, we trigger the DVC pipeline to run data transformations and train the machine learning models. Afterward, we start the API backend and the app UI.
+
+```fish
+# 1. Create the shared external network
+docker network create data_platform_net
+
+# 2. Start PostgreSQL (Backend for Airflow & Nessie)
+cd data_platform/infra/postgres; and docker compose up -d
+
+# 3. Start Nessie Catalog
+cd ../nessie; and docker compose up -d
+
+# 4. Start Spark Cluster and MinIO
+cd ../spark_minio; and docker compose up -d
+
+# 5. Initialize and start Apache Airflow
+cd ../airflow; and docker compose up airflow-init; and docker compose up -d
+
+# 6. Start the MLflow tracking server locally (run in a separate terminal context)
+# cd ../../../../
+# set -x MLFLOW_TRACKING_URI http://127.0.0.1:5000
+# set -x MLFLOW_S3_ENDPOINT_URL http://localhost:9000
+# mlflow server --host 0.0.0.0 --port 5000
+
+# 7. Run the DVC pipeline to execute data preparation, tuning, and training stages
+cd ../../../shared; and dvc repro
+
+# 8. Start the FastAPI backend system (run in a separate terminal context)
+cd ../backend; and uv run uvicorn src.api.main:app --reload --port 8000
+
+# 9. Start the Streamlit visualization application (run in a separate terminal context)
+cd ../frontend; and uv run streamlit run src/app.py
 ```
 
-### 2. Module Setup & Execution
+## Environment Variables
 
-Each module manages its own dependencies and execution logic:
+The project predominantly utilizes an `.env` file located exclusively at the root directory. Below are the key environment variables identified from configuration files that should be documented:
 
-#### ML Core
-- **What:** DVC pipeline (prepare → tune → train → evaluate), MLflow tracking, Optuna tuning.
-- **Docs:** [`ml/README.md`](./ml/README.md)
+| Variable | Description / Role | Expected Location |
+|---|---|---|
+| `MINIO_ACCESS_KEY` | Username / Access Key for the MinIO root user | `.env` |
+| `MINIO_SECRET_KEY` | Password / Secret Key for the MinIO root user | `.env` |
+| `MINIO_ENDPOINT` | Full HTTP endpoint URL to reach MinIO (e.g., `http://localhost:9000`) | `.env` |
+| `POSTGRES_USER` | Master username for the central Postgres instance | `.env` |
+| `POSTGRES_PASSWORD` | Master password for Postgres authentication | `.env` |
+| `POSTGRES_DB` | Default global database initialization name | `.env` |
+| `POSTGRES_HOST` | Database host string address | `.env` |
+| `POSTGRES_PORT` | Database connection port (Default: `5432`) | `.env` |
+| `MLFLOW_TRACKING_URI` | URI to log metrics and MLflow run configurations (e.g., `http://127.0.0.1:5000`) | `.env` |
+| `MLFLOW_S3_ENDPOINT_URL` | MinIO override destination endpoint for MLflow artifact storage | `.env` |
+| `AWS_ACCESS_KEY_ID` | S3-compatibility key for MLflow to connect to MinIO correctly | `.env` |
+| `AWS_SECRET_ACCESS_KEY` | S3-compatibility secret for MLflow to connect to MinIO correctly | `.env` |
+| `PGADMIN_DEFAULT_EMAIL` | Default login email for the pgAdmin database UI | docker-compose / `.env` (TODO: Verify value to expose) |
+| `PGADMIN_DEFAULT_PASSWORD` | Default login password for the pgAdmin database UI | docker-compose / `.env` (TODO: Verify value to expose) |
 
-#### Data Platform
-- **What:** Spark ETL, dbt models, Airflow DAGs.
-- **Docs:** [`data_platform/README.md`](./data_platform/README.md)
+> **TODO:** If DVC enforces remote registry storage (e.g., AWS S3 or MinIO), appropriate external tracking credentials will optionally need to be included. Furthermore, if Streamlit or FastAPI requires external binding reference parameters (e.g. backend host IP lookup), these variables need to be formally supplemented to `.env`.
 
-#### Backend API
-- **What:** FastAPI serving + `/prediction` + `/xai` endpoints.
-- **Docs:** [`backend/README.md`](./backend/README.md)
+## Decision Log
 
-#### Frontend Dashboard
-- **What:** Streamlit UI for predictions + SHAP visualizations.
-- **Docs:** [`frontend/README.md`](./frontend/README.md)
+*   **Why Iceberg / Nessie / MinIO?** Apache Iceberg facilitates core ACID transactions and safe schema evolutions on large data lakes; Nessie injects Git-like catalog branching features avoiding storage duplication; MinIO dynamically replicates an underlying high-performance, S3-compatible local testing object storage format without needing AWS.
+*   **Why connect dbt with a Spark Thrift target?** Providing a Thrift JDBC/ODBC endpoint intrinsically allows dbt to directly schedule and submit advanced distributed SQL statement transformations across our data platform workers without integrating a discrete data warehouse processing engine.
+*   **Why `applyInPandas` for EWMA logic?** Forecasting traits like Exponentially Weighted Moving Averages inherently require rigorous sequential ordering mechanisms that translate poorly in pure Spark SQL context; employing PySpark's `applyInPandas` executes rapid and inherently safe pandas vectorization bounds across mapped data partitions naturally.
+*   **Why DVC + MLflow + Optuna?** DVC robustly locks down specific iterations for massive datasets and exported model objects over time; MLflow tightly centralizes complex training metrics metadata dashboards dynamically; Optuna effortlessly automates resilient and statistically profound hyperparameter sweeping alongside nested MLflow metric aggregations intuitively.
+*   **Why FastAPI + Streamlit?** FastAPI ships with unparalleled async endpoints ideally suited to wrap rapid ML models predictions alongside dense backend Explainable AI structures; paired with Streamlit, it enables code-agnostic creation of compelling real-time frontend charts to elegantly simplify the visual delivery processes.
 
-#### Shared Resources
-- **What:** Jupyter notebooks and common utilities.
-- **Docs:** [`shared/README.md`](./shared/README.md)
+## What to Read Next
 
-## Contact
+We invite you to onboard module-by-module to get comprehensive knowledge of the architectural breakdown:
 
-**📧 moonlig73@gmail.com**
+1.  **[Data Platform Infrastructure](./data_platform/infra/README.md)** – Understand the initial Docker-based orchestration services integration and networking rules.
+2.  **[Airflow Orchestration Capabilities](./data_platform/infra/airflow/README.md)** – Delve into the core DAG execution layout and new asset-driven data scheduling practices.
+3.  **[Spark & MinIO Data Lake Integration](./data_platform/infra/spark_minio/README.md)** – Dive heavily into scaling Apache Iceberg concepts inside our custom cluster nodes alongside Apache Nessie table definitions.
+4.  **[dbt Implementations](./data_platform/dbt/README.md)** – Learn data warehouse modeling layers utilizing modern analytical SQL mappings conventions.
+5.  **[Shared Data Tracking & DVC Usage](./shared/README.md)** – Ascertain reproducibility techniques manipulating our parameter mappings via Data Version Control.
+6.  **[Machine Learning Engineering Core](./ml/README.md)** – Assess our deep integrations encompassing `LightGBM` regressions arrays tracked carefully amongst `Optuna` studies inside `MLflow` loops.
