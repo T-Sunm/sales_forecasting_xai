@@ -1,0 +1,16 @@
+services:
+  trino:
+    image: "trinodb/trino:478"
+    container_name: trino
+    ports:
+      # Port 8080 host bị chiếm bởi Airflow, sử dụng 8085 để thay thế
+      - "8085:8080"
+    volumes:
+      - ./etc/catalog:/etc/trino/catalog:ro
+    networks:
+      - data_network
+
+networks:
+  data_network:
+    external: true
+    name: data_platform_net

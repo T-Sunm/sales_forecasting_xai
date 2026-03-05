@@ -6,7 +6,7 @@
 ] -%}
 
 with raw as (
-  select * from parquet.`s3a://datalake/staging/parquet/weather`
+  select * from default.raw_weather
 )
 
 select

@@ -8,10 +8,18 @@ from airflow.operators.python import PythonOperator
 
 _NAMESPACES = ["nessie.default", "nessie.analytics"]
 
-_PYHIVE_CODE = """
+_CODE = """\
 from pyhive import hive
 
+original_execute = hive.Cursor.execute
+def dummy_execute(self, operation, parameters=None, **kwargs):
+    if operation.upper().startswith("USE "):
+        return
+    original_execute(self, operation, parameters, **kwargs)
+
+hive.Cursor.execute = dummy_execute
 conn = hive.Connection(host="spark-thrift", port=10001, username="airflow")
+hive.Cursor.execute = original_execute
 cur = conn.cursor()
 for ns in {namespaces!r}:
     cur.execute(f"CREATE NAMESPACE IF NOT EXISTS {{ns}}")
@@ -24,9 +32,8 @@ conn.close()
 
 def _bootstrap():
     subprocess.run(
-        ["/opt/airflow/dbt_venv/bin/python", "-c", _PYHIVE_CODE],
+        ["/opt/airflow/dbt_venv/bin/python", "-c", _CODE],
         check=True,
-        capture_output=False,
     )
 
 

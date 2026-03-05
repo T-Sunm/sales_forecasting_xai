@@ -1,7 +1,7 @@
 {{ config(schema='default') }}
 
 with raw as (
-  select * from parquet.`s3a://datalake/staging/parquet/train`
+  select * from default.raw_train
 )
 
 select

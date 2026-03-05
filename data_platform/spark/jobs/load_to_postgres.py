@@ -20,9 +20,9 @@ except ImportError:
     try:
         from config import STAGING_PATH, INTER_PATH, MART_PATH, SPARK_CONFIGS
     except ImportError:
-        STAGING_PATH = "s3a://datalake/staging/"
-        INTER_PATH = "s3a://datalake/intermediate/"
-        MART_PATH = "s3a://datalake/mart/"
+        STAGING_PATH = "s3://datalake/staging/"
+        INTER_PATH = "s3://datalake/intermediate/"
+        MART_PATH = "s3://datalake/mart/"
         SPARK_CONFIGS = {}
 
 PG_HOST = os.environ.get("PG_HOST", "postgres")

@@ -7,11 +7,11 @@ S3_ACCESS_KEY = "minioadmin"
 S3_SECRET_KEY = "minioadmin"
 
 # Data Lake Paths
-BRONZE_PATH = f"s3a://{BUCKET_NAME}/bronze/"
-STAGING_PATH = f"s3a://{BUCKET_NAME}/staging/"
-INTER_PATH = f"s3a://{BUCKET_NAME}/intermediate/"
-SILVER_PATH = f"s3a://{BUCKET_NAME}/silver/"
-MART_PATH = f"s3a://{BUCKET_NAME}/mart/"
+BRONZE_PATH = f"s3://{BUCKET_NAME}/bronze/"
+STAGING_PATH = f"s3://{BUCKET_NAME}/staging/"
+INTER_PATH = f"s3://{BUCKET_NAME}/intermediate/"
+SILVER_PATH = f"s3://{BUCKET_NAME}/silver/"
+MART_PATH = f"s3://{BUCKET_NAME}/mart/"
 
 # Staging Layer Tables
 STAGING_TABLES = {
@@ -63,11 +63,6 @@ WEATHER_NUMERIC_COLS = [
 SPARK_CONFIGS = {
     "spark.sql.adaptive.enabled": "true",
     "spark.sql.adaptive.coalescePartitions.enabled": "true",
-    "spark.hadoop.fs.s3a.endpoint": S3_ENDPOINT,
-    "spark.hadoop.fs.s3a.access.key": S3_ACCESS_KEY,
-    "spark.hadoop.fs.s3a.secret.key": S3_SECRET_KEY,
-    "spark.hadoop.fs.s3a.path.style.access": "true",
-    "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
     "spark.pyspark.python": "/usr/bin/python3.12",
     "spark.pyspark.driver.python": "python3",
 }

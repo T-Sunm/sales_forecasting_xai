@@ -42,15 +42,12 @@ API_PORT = 8000
 API_NAME = "Sales Forecasting API"
 API_VERSION = "1.0.0"
 
-# Database Configuration (PostgreSQL)
-DB_DIALECT = os.getenv("DB_DIALECT", "postgresql")
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = os.getenv("DB_PORT", "5432")
-DB_NAME = os.getenv("DB_NAME", "sales_forecasting")
-DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASS = os.getenv("DB_PASS", "changeme")
-
-DB_URL = f"{DB_DIALECT}://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+# Database Configuration (Trino)
+TRINO_HOST = os.getenv("TRINO_HOST", "localhost")
+TRINO_PORT = int(os.getenv("TRINO_PORT", "8085"))
+TRINO_USER = os.getenv("TRINO_USER", "admin")
+TRINO_CATALOG = os.getenv("TRINO_CATALOG", "iceberg")
+TRINO_SCHEMA = os.getenv("TRINO_SCHEMA", "mart")
 
 SECRET_KEY = os.getenv("SECRET_KEY", "my-super-secret-key-2025")
 CORS_ORIGINS = ["*"]

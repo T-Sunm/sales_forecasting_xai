@@ -61,11 +61,8 @@
 
 import os
 import tempfile
-from datetime import datetime
-
 import pandas as pd
-import requests
-from bs4 import BeautifulSoup
+from pandas.tseries.holiday import USFederalHolidayCalendar
 from minio import Minio
 from minio.error import S3Error
 
@@ -77,22 +74,13 @@ BUCKET = os.getenv("MINIO_BUCKET", "datalake")
 PREFIX = os.getenv("PREFIX", "staging/raw/")
 
 
-def get_holidays_from_web(year, country_code=1):
-    url = f"https://www.timeanddate.com/calendar/custom.html?year={year}&country={country_code}&cols=3&df=1&hol=25"
-    response = requests.get(url, timeout=10)
-    dom = BeautifulSoup(response.content, "html.parser")
-    trs = dom.select("table.cht.lpad tr")
-    
-    holidays = []
-    for tr in trs:
-        try:
-            datestr = tr.select_one("td:nth-of-type(1)").text
-            holiday_name = tr.select_one("td:nth-of-type(2)").text
-            date = datetime.strptime(f"{year} {datestr}", "%Y %b %d")
-            holidays.append({"date": date, "holiday": holiday_name})
-        except:
-            continue
-    return pd.DataFrame(holidays)
+def get_holidays_pandas(start_year, end_year):
+    cal = USFederalHolidayCalendar()
+    holidays = cal.holidays(start=f'{start_year}-01-01', end=f'{end_year}-12-31')
+    return pd.DataFrame({
+        "date": holidays,
+        "holiday": "US Federal Holiday"
+    })
 
 
 def get_blackfriday_dates():
@@ -121,16 +109,8 @@ def main():
     if not client.bucket_exists(BUCKET):
         client.make_bucket(BUCKET)
 
-    all_holidays = []
-    for year in [2012, 2013, 2014]:
-        df = get_holidays_from_web(year)
-        if not df.empty:
-            all_holidays.append(df)
-    
-    if all_holidays:
-        df_holidays = pd.concat(all_holidays, ignore_index=True)
-        df_holidays['date'] = pd.to_datetime(df_holidays['date'])
-        upload_df_to_minio(client, df_holidays, "holidays.csv")
+    df_holidays = get_holidays_pandas(2012, 2014)
+    upload_df_to_minio(client, df_holidays, "holidays.csv")
 
     df_blackfriday = pd.DataFrame({
         'date': get_blackfriday_dates(),

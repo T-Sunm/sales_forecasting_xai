@@ -1,21 +1,28 @@
-from sqlalchemy import create_engine, text
 import pandas as pd
-from src.config import DB_URL
+from trino.dbapi import connect
 
-# Create SQLAlchemy engine
-engine = create_engine(DB_URL)
+from src.config import TRINO_HOST, TRINO_PORT, TRINO_USER, TRINO_CATALOG, TRINO_SCHEMA
 
-def run_query(query: str, params: dict = None) -> pd.DataFrame:
-    """
-    Run a SQL query and return a pandas DataFrame
-    """
+
+def get_connection():
+    return connect(
+        host=TRINO_HOST,
+        port=TRINO_PORT,
+        user=TRINO_USER,
+        catalog=TRINO_CATALOG,
+        schema=TRINO_SCHEMA,
+    )
+
+
+def run_query(query: str, params: tuple = None) -> pd.DataFrame:
+    """Run a SQL query against Trino and return a pandas DataFrame."""
     try:
-        if params:
-            # SQLAlchemy text() with named parameters
-            return pd.read_sql(text(query), engine, params=params)
-        else:
-            return pd.read_sql(text(query), engine)
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(query, params or [])
+            rows = cur.fetchall()
+            columns = [desc[0] for desc in cur.description]
+            return pd.DataFrame(rows, columns=columns)
     except Exception as e:
         print(f"Database error: {str(e)}")
-        # Return empty df on error to avoid crashing the API
         return pd.DataFrame()

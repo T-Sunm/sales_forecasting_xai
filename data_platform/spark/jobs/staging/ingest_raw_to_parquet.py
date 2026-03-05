@@ -44,22 +44,14 @@
 # === END OLD CODE ===
 
 
-import sys
-from pathlib import Path
 from pyspark.sql import SparkSession
 
-sys.path.append(str(Path(__file__).parent.parent.parent / "configs"))
-from config import SPARK_CONFIGS
-
 BUCKET = "datalake"
-RAW_BASE = f"s3a://{BUCKET}/staging/raw/"
-PARQUET_BASE = f"s3a://{BUCKET}/staging/parquet/"
+RAW_BASE = f"s3://{BUCKET}/staging/raw/"
+PARQUET_BASE = f"s3://{BUCKET}/staging/parquet/"
 CSV_FILES = ["train.csv", "key.csv", "weather.csv", "test.csv", "holidays.csv", "blackfriday.csv"]
 
 builder = SparkSession.builder.appName("walmart-staging-ingest")
-for key, val in SPARK_CONFIGS.items():
-    builder = builder.config(key, val)
-
 spark = builder.getOrCreate()
 spark.sparkContext.setLogLevel("WARN")
 
@@ -68,7 +60,16 @@ def ingest_csv(name: str):
     df = spark.read.option("header", "true").option("inferSchema", "true").csv(RAW_BASE + name)
     out_path = PARQUET_BASE + name.replace(".csv", "")
     df.write.mode("overwrite").parquet(out_path)
-    print(f"✅ {name} -> {out_path}")
+    
+    # Save as Iceberg table for standard Lakehouse architecture
+    table_name = "default.raw_" + name.replace(".csv", "")
+    # Fix spaces and special characters in column names to be safely used in Iceberg
+    df_iceberg = df
+    for col_name in df_iceberg.columns:
+        df_iceberg = df_iceberg.withColumnRenamed(col_name, col_name.strip().replace(' ', '_'))
+        
+    df_iceberg.write.format("iceberg").mode("overwrite").saveAsTable(table_name)
+    print(f"✅ {name} -> {out_path} & {table_name}")
 
 
 for f in CSV_FILES:
