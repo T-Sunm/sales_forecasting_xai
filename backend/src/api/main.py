@@ -2,13 +2,15 @@ import time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 import pandas as pd
 from src.config import (
-    API_NAME, API_VERSION, API_HOST, API_PORT, 
+    API_NAME, API_VERSION, API_HOST, API_PORT,
     CORS_ORIGINS, DEBUG_MODE, TRAIN_DATA_PATH
 )
 from src.utils.logger import setup_logging, APILoggingMiddleware
+from src.utils.db_manager import TrinoServiceError
 from src.core.model import ModelManager
 from src.api.routers import health, prediction, xai, models, data, analytics
 
@@ -91,6 +93,11 @@ app.include_router(prediction.router)
 app.include_router(xai.router)
 app.include_router(data.router)
 app.include_router(analytics.router)
+
+# 7. Centralized Trino error handler  <-- "Lưới" chuyên chụp tem TrinoServiceError
+@app.exception_handler(TrinoServiceError)
+async def trino_error_handler(request: Request, exc: TrinoServiceError):
+    return JSONResponse(status_code=503, content={"detail": f"Trino error: {exc}"})
 
 # 7. Root Endpoint
 @app.get("/", tags=["General"])

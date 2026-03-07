@@ -1,37 +1,63 @@
 from fastapi import APIRouter, Query, HTTPException
 from typing import Optional, List
 import pandas as pd
-from datetime import date
+from datetime import date, timedelta
 
 from src.utils.db_manager import run_query
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
+# ── Trino table names (iceberg.analytics) ────────────────────────────────────
+_FACT = "fact_sales_item_daily"        # grain: date × store_id × item_id
+
+# Aggregated views built inline via CTEs
+_DATE_SALES = f"""(
+    SELECT date,
+           SUM(units)  AS total_units,
+           COUNT(*)    AS sales_records
+    FROM {_FACT}
+    GROUP BY date
+)"""
+
+_STORE_DAY = f"""(
+    SELECT date,
+           store_id,
+           SUM(units)  AS total_units,
+           COUNT(*)    AS sales_records
+    FROM {_FACT}
+    GROUP BY date, store_id
+)"""
+
 
 @router.get("/filters")
 async def get_dashboard_filters():
     """Get initial filter values (date range, stores)"""
-    date_bounds = run_query("SELECT MIN(date) as min_date, MAX(date) as max_date FROM mart_date_sales")
+    date_bounds = run_query(
+        f"SELECT MIN(date) as min_date, MAX(date) as max_date FROM {_FACT}"
+    )
     if date_bounds.empty:
-        raise HTTPException(503, "Database not available")
+        raise HTTPException(503, "No data available in fact_sales_item_daily")
 
-    min_date = str(date_bounds["min_date"].iloc[0])
-    max_date = str(date_bounds["max_date"].iloc[0])
-
-    stores_df = run_query("SELECT DISTINCT store_id FROM mart_store_day ORDER BY store_id")
-    stores = stores_df["store_id"].tolist()
-
-    return {"min_date": min_date, "max_date": max_date, "stores": stores}
+    stores_df = run_query(
+        f"SELECT DISTINCT store_id FROM {_STORE_DAY} t ORDER BY store_id"
+    )
+    return {
+        "min_date": str(date_bounds["min_date"].iloc[0]),
+        "max_date": str(date_bounds["max_date"].iloc[0]),
+        "stores": stores_df["store_id"].tolist()
+    }
 
 
 @router.get("/items")
 async def get_items(store_id: Optional[int] = None):
     """Get items, optionally filtered by store"""
     if store_id is None:
-        items_df = run_query("SELECT DISTINCT item_id FROM mart_sales_base ORDER BY item_id")
+        items_df = run_query(
+            f"SELECT DISTINCT item_id FROM {_FACT} ORDER BY item_id"
+        )
     else:
         items_df = run_query(
-            "SELECT DISTINCT item_id FROM mart_sales_base WHERE store_id = ? ORDER BY item_id",
+            f"SELECT DISTINCT item_id FROM {_FACT} WHERE store_id = ? ORDER BY item_id",
             (store_id,)
         )
     return {"items": items_df["item_id"].tolist()}
@@ -45,26 +71,32 @@ async def get_kpis(
 ):
     """Calculate KPI metrics for the given range"""
     if store_id is None:
-        grain_table = "mart_date_sales"
+        grain_table = _DATE_SALES
         where_clause = "date BETWEEN ? AND ?"
-        base_params = (str(start_date), str(end_date))
+        base_params = (start_date, end_date)
     else:
-        grain_table = "mart_store_day"
+        grain_table = _STORE_DAY
         where_clause = "store_id = ? AND date BETWEEN ? AND ?"
-        base_params = (store_id, str(start_date), str(end_date))
+        base_params = (store_id, start_date, end_date)
 
     dates = run_query(
-        f"SELECT MIN(date) as mn, MAX(date) as mx FROM {grain_table} WHERE {where_clause}",
+        f"SELECT MIN(date) as mn, MAX(date) as mx FROM {grain_table} t WHERE {where_clause}",
         base_params
     )
     if dates.empty or dates.iloc[0, 0] is None:
         return {"total_units": 0, "avg_daily": 0, "growth_pct": 0}
 
     min_d, max_d = dates.iloc[0, 0], dates.iloc[0, 1]
-    mid_d = str(min_d + (max_d - min_d) / 2)
+    
+    # Ensure min_d and max_d are date objects for timedelta math
+    if isinstance(min_d, str):
+        min_d = date.fromisoformat(min_d)
+    if isinstance(max_d, str):
+        max_d = date.fromisoformat(max_d)
+        
+    mid_d = min_d + timedelta(days=(max_d - min_d).days // 2)
 
     if store_id is None:
-        kpi_params = (mid_d, str(start_date), str(end_date))
         query = f"""
             SELECT
                 SUM(total_units) as total_units,
@@ -72,11 +104,10 @@ async def get_kpis(
                 SUM(sales_records) as total_records,
                 SUM(CASE WHEN date <= ? THEN total_units ELSE 0 END) as p1_units,
                 SUM(CASE WHEN date >  ? THEN total_units ELSE 0 END) as p2_units
-            FROM {grain_table}
+            FROM {grain_table} t
             WHERE date BETWEEN ? AND ?
         """
-        kpi_params = (mid_d, mid_d, str(start_date), str(end_date))
-        count_params = base_params
+        kpi_params = (mid_d, mid_d, start_date, end_date)
     else:
         query = f"""
             SELECT
@@ -85,33 +116,31 @@ async def get_kpis(
                 SUM(sales_records) as total_records,
                 SUM(CASE WHEN date <= ? THEN total_units ELSE 0 END) as p1_units,
                 SUM(CASE WHEN date >  ? THEN total_units ELSE 0 END) as p2_units
-            FROM {grain_table}
+            FROM {grain_table} t
             WHERE store_id = ? AND date BETWEEN ? AND ?
         """
-        kpi_params = (mid_d, mid_d, store_id, str(start_date), str(end_date))
-        count_params = base_params
+        kpi_params = (mid_d, mid_d, store_id, start_date, end_date)
 
     kpi_df = run_query(query, kpi_params)
     if kpi_df.empty:
         return {"total_units": 0, "avg_daily": 0}
+
+    days_df = run_query(
+        f"SELECT COUNT(DISTINCT date) as cnt FROM {grain_table} t WHERE {where_clause}",
+        base_params
+    )
 
     row = kpi_df.iloc[0]
     p1 = row["p1_units"] or 0
     p2 = row["p2_units"] or 0
     growth = ((p2 - p1) / p1 * 100) if p1 > 0 else 0
 
-    days_df = run_query(
-        f"SELECT COUNT(DISTINCT date) as cnt FROM {grain_table} WHERE {where_clause}",
-        count_params
-    )
-    days_count = days_df.iloc[0, 0] or 1
-
     return {
         "total_units": float(row["total_units"] or 0),
         "avg_daily": float(row["avg_daily"] or 0),
         "total_records": int(row["total_records"] or 0),
         "growth_pct": float(growth),
-        "days_count": int(days_count),
+        "days_count": int(days_df.iloc[0, 0] or 1),
         "p1_units": float(p1),
         "p2_units": float(p2)
     }
@@ -125,16 +154,25 @@ async def get_trends(
 ):
     """Get time-series trends"""
     if store_id is None:
-        query = "SELECT CAST(date AS VARCHAR) as date, total_units as units FROM mart_date_sales WHERE date BETWEEN ? AND ? ORDER BY date"
-        params = (str(start_date), str(end_date))
+        query = f"""
+            SELECT CAST(date AS VARCHAR) as date, SUM(units) as units
+            FROM {_FACT}
+            WHERE date BETWEEN ? AND ?
+            GROUP BY date
+            ORDER BY date
+        """
+        params = (start_date, end_date)
     else:
-        query = "SELECT CAST(date AS VARCHAR) as date, total_units as units FROM mart_store_day WHERE store_id = ? AND date BETWEEN ? AND ? ORDER BY date"
-        params = (store_id, str(start_date), str(end_date))
+        query = f"""
+            SELECT CAST(date AS VARCHAR) as date, SUM(units) as units
+            FROM {_FACT}
+            WHERE store_id = ? AND date BETWEEN ? AND ?
+            GROUP BY date
+            ORDER BY date
+        """
+        params = (store_id, start_date, end_date)
 
     df = run_query(query, params)
-    if df.empty:
-        return {"data": []}
-
     return {"data": df.to_dict(orient="records")}
 
 
@@ -147,20 +185,19 @@ async def get_performance(
     """Top 10 items and stores"""
     if store_id:
         top_items = run_query(
-            "SELECT item_id, SUM(units) as units FROM mart_sales_base WHERE date BETWEEN ? AND ? AND store_id = ? GROUP BY 1 ORDER BY 2 DESC LIMIT 10",
-            (str(start_date), str(end_date), store_id)
+            f"SELECT item_id, SUM(units) as units FROM {_FACT} WHERE date BETWEEN ? AND ? AND store_id = ? GROUP BY item_id ORDER BY units DESC LIMIT 10",
+            (start_date, end_date, store_id)
         )
     else:
         top_items = run_query(
-            "SELECT item_id, SUM(units) as units FROM mart_sales_base WHERE date BETWEEN ? AND ? GROUP BY 1 ORDER BY 2 DESC LIMIT 10",
-            (str(start_date), str(end_date))
+            f"SELECT item_id, SUM(units) as units FROM {_FACT} WHERE date BETWEEN ? AND ? GROUP BY item_id ORDER BY units DESC LIMIT 10",
+            (start_date, end_date)
         )
 
     top_stores = run_query(
-        "SELECT store_id, SUM(total_units) as units FROM mart_store_day WHERE date BETWEEN ? AND ? GROUP BY 1 ORDER BY 2 DESC LIMIT 10",
-        (str(start_date), str(end_date))
+        f"SELECT store_id, SUM(units) as units FROM {_FACT} WHERE date BETWEEN ? AND ? GROUP BY store_id ORDER BY units DESC LIMIT 10",
+        (start_date, end_date)
     )
-
     return {
         "top_items": top_items.to_dict(orient="records"),
         "top_stores": top_stores.to_dict(orient="records")
@@ -175,27 +212,23 @@ async def compare_products(
     store_id: Optional[int] = None
 ):
     """Benchmark multiple products"""
-    # Trino không hỗ trợ bind array, dùng IN (...) với int ids an toàn
     item_list = ",".join(map(str, item_ids))
     if store_id:
         query = f"""
             SELECT CAST(date AS VARCHAR) as date, item_id, units
-            FROM mart_sales_base
+            FROM {_FACT}
             WHERE item_id IN ({item_list}) AND date BETWEEN ? AND ? AND store_id = ?
         """
-        params = (str(start_date), str(end_date), store_id)
+        params = (start_date, end_date, store_id)
     else:
         query = f"""
             SELECT CAST(date AS VARCHAR) as date, item_id, units
-            FROM mart_sales_base
+            FROM {_FACT}
             WHERE item_id IN ({item_list}) AND date BETWEEN ? AND ?
         """
-        params = (str(start_date), str(end_date))
+        params = (start_date, end_date)
 
     df = run_query(query, params)
-    if df.empty:
-        return {"data": []}
-
     return {"data": df.to_dict(orient="records")}
 
 
@@ -207,38 +240,23 @@ async def get_distribution(
     item_id: Optional[int] = None
 ):
     """Get sales distribution data (Histogram)"""
-    # Build detailed distribution query
     conditions = ["date BETWEEN ? AND ?"]
-    params1 = [str(start_date), str(end_date)]
+    params_list = [start_date, end_date]
 
     if store_id:
         conditions.append("store_id = ?")
-        params1.append(store_id)
+        params_list.append(store_id)
     if item_id:
         conditions.append("item_id = ?")
-        params1.append(item_id)
+        params_list.append(item_id)
 
     where = " AND ".join(conditions)
-    df1 = run_query(
-        f"SELECT units FROM mart_sales_base WHERE {where} LIMIT 10000",
-        tuple(params1)
-    )
+    bound = tuple(params_list)
 
-    # Build aggregated distribution query
-    conditions2 = ["date BETWEEN ? AND ?"]
-    params2 = [str(start_date), str(end_date)]
-
-    if store_id:
-        conditions2.append("store_id = ?")
-        params2.append(store_id)
-    if item_id:
-        conditions2.append("item_id = ?")
-        params2.append(item_id)
-
-    where2 = " AND ".join(conditions2)
+    df1 = run_query(f"SELECT units FROM {_FACT} WHERE {where} LIMIT 10000", bound)
     df2 = run_query(
-        f"SELECT store_id, CAST(date AS VARCHAR) as date, SUM(units) as store_day_units FROM mart_sales_base WHERE {where2} GROUP BY 1, 2",
-        tuple(params2)
+        f"SELECT store_id, CAST(date AS VARCHAR) as date, SUM(units) as store_day_units FROM {_FACT} WHERE {where} GROUP BY store_id, date",
+        bound
     )
 
     return {
