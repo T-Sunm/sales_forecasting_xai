@@ -21,6 +21,7 @@ dependencies = [
     "prophet==1.2.1",
     "beautifulsoup4==4.14.2",
     "trino>=0.336.0",
+    "mlflow>=2.15.0",
 ]
 
 [build-system]

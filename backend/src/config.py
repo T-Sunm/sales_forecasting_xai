@@ -29,6 +29,11 @@ SALES_2017_CSV = DATA_DIR / "2017_sales.csv"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 DEBUG_MODE = os.getenv("DEBUG", "True").lower() == "true"
 
+# MLflow Model Registry
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
+MLFLOW_REGISTERED_MODEL_NAME = os.getenv("MLFLOW_REGISTERED_MODEL_NAME", "sales-forecasting-lgbm")
+MLFLOW_MODEL_ALIAS = os.getenv("MLFLOW_MODEL_ALIAS", "champion")
+
 FEATURE_COUNT = 88
 DATE_FORMAT = "%Y-%m-%d"
 

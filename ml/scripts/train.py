@@ -10,6 +10,7 @@ import yaml
 import joblib
 import lightgbm as lgbm
 import mlflow
+from mlflow import MlflowClient
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 sys.path.append(os.getcwd())
@@ -18,6 +19,8 @@ from utils.mlflow_utils import setup_mlflow
 from processing.validator import TARGET_COL, get_feature_cols
 
 PARAMS_FILE = "../shared/params.yaml"
+REGISTERED_MODEL_NAME = "sales-forecasting-lgbm"
+CHAMPION_ALIAS = "champion"
 
 
 def load_train_params(best_params_path=None):
@@ -35,7 +38,8 @@ def load_train_params(best_params_path=None):
 
 
 def train_logic(args):
-    mlflow.lightgbm.autolog()
+    # log_models=True de autolog ghi artifact model/, can de register_model() co URI hop le
+    mlflow.lightgbm.autolog(log_models=True)
     start_time = time.time()
 
     if not os.path.exists(args.train_path):
@@ -107,6 +111,25 @@ def train_logic(args):
         "train_time_sec": round(train_time, 2),
         "best_iteration": model.best_iteration_ if hasattr(model, "best_iteration_") else params["n_estimators"],
     }
+
+    # Log model artifact (dùng autolog đã ghi, lấy run_id để register)
+    run_id = mlflow.active_run().info.run_id
+    model_uri = f"runs:/{run_id}/model"
+
+    # Register model vào Registry bằng hàm generic
+    model_version = mlflow.register_model(
+        model_uri=model_uri,
+        name=REGISTERED_MODEL_NAME,
+    )
+
+    # Gán alias @champion cho version vừa register
+    client = MlflowClient()
+    client.set_registered_model_alias(
+        name=REGISTERED_MODEL_NAME,
+        alias=CHAMPION_ALIAS,
+        version=model_version.version,
+    )
+    print(f"[OK] Registered '{REGISTERED_MODEL_NAME}' v{model_version.version} as @{CHAMPION_ALIAS}")
 
     return model, metrics
 

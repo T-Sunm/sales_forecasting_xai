@@ -3,14 +3,21 @@ Core Model Module - Business Logic Layer
 Separates prediction logic from UI layer for better testability and reusability.
 """
 
-import pickle
+import mlflow
+import mlflow.pyfunc
 from datetime import datetime, date
 from typing import Dict, Any, Optional, Tuple, List
 import numpy as np
 import pandas as pd
 from pydantic import BaseModel, Field, validator
 
-from src.config import LGBM_MODELS_PKL, COL_STORE_ID, COL_ITEM_ID
+from src.config import (
+    MLFLOW_TRACKING_URI,
+    MLFLOW_REGISTERED_MODEL_NAME,
+    MLFLOW_MODEL_ALIAS,
+    COL_STORE_ID,
+    COL_ITEM_ID,
+)
 
 
 # ==================== PYDANTIC MODELS ====================
@@ -105,33 +112,37 @@ class ModelManager:
         
     def load_models(self) -> bool:
         """
-        Load trained model from pickle file.
-        
+        Load trained model from MLflow Model Registry via @champion alias.
+
         Returns:
             bool: True if successful, False otherwise
         """
         try:
-            with open(LGBM_MODELS_PKL, "rb") as file:
-                self.model = pickle.load(file)
+            mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+            model_uri = f"models:/{MLFLOW_REGISTERED_MODEL_NAME}@{MLFLOW_MODEL_ALIAS}"
+            self.model = mlflow.pyfunc.load_model(model_uri)
             return True
-        except FileNotFoundError:
-            return False
         except Exception:
             return False
+    
+    def get_feature_names(self) -> list:
+        """
+        Get model feature names from MLflow model signature.
+        Generic approach - works with any registered flavor.
+        """
+        sig = self.model.metadata.signature
+        return [inp.name for inp in sig.inputs]
     
     def get_model(self, store_id: int = None, item_id: int = None):
         """
         Retrieve the global model.
         store_id and item_id params kept for API compatibility.
-        
-        Returns:
-            LightGBM model or None if not loaded
         """
         return self.model
-    
+
     def prepare_input(
-        self, 
-        recent_samples: pd.DataFrame, 
+        self,
+        recent_samples: pd.DataFrame,
         prediction_input: PredictionInput
     ) -> pd.Series:
         """
@@ -277,8 +288,8 @@ class ModelManager:
             # Create DataFrame for prediction
             input_df = pd.DataFrame([input_row])
             
-            # Select only features used by the model
-            model_features = model.feature_name_
+            # Select only features from model signature (generic MLflow API)
+            model_features = self.get_feature_names()
             X_pred = input_df[model_features]
             
             # Make prediction (model outputs log-transformed values)

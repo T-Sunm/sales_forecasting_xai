@@ -147,7 +147,14 @@ def collect_prediction_inputs():
 
     with col1:
         st.subheader("📅 Thông tin ngày")
-        prediction_date = st.date_input("Ngày dự đoán", datetime.now().date() + timedelta(days=1))
+        DATASET_END = datetime(2014, 7, 31).date()  # Max date in training data
+        prediction_date = st.date_input(
+            "Ngày dự đoán",
+            value=DATASET_END,
+            min_value=datetime(2012, 1, 1).date(),
+            max_value=DATASET_END + timedelta(days=14),
+            help="Giới hạn trong dataset (2012-01-01 → 2014-08-14) — chọn xa hơn sẽ chạy dự đoán đệ quy lâu hơn"
+        )
         is_holiday = st.checkbox("Ngày lễ (Holiday)", value=False)
         is_blackfriday = st.checkbox("Black Friday", value=False)
 
