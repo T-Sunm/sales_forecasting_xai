@@ -1,8 +1,9 @@
 {{ config(schema='default') }}
 
 {%- set numeric_cols = [
-  'tmax', 'tmin', 'tavg', 'dewpoint', 'wetbulb',
-  'preciptotal', 'snowfall', 'resultspeed', 'resultdir', 'avgspeed'
+  'tmax', 'tmin', 'tavg', 'depart', 'dewpoint', 'wetbulb', 'heat', 'cool',
+  'sunrise', 'sunset', 'snowfall', 'preciptotal', 'stnpressure', 'sealevel',
+  'resultspeed', 'resultdir', 'avgspeed'
 ] -%}
 
 {%- set weather_codes = [

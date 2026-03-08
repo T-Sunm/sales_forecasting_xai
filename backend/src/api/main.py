@@ -36,18 +36,35 @@ async def lifespan(app: FastAPI):
     app.state.model_manager = model_manager
     
     # Load Feature Data (For prediction context)
-    logger.info("Loading feature engineered data...")
+    logger.info("Loading feature data...")
+    feature_data = None
+    
+    # 1. Try Trino first (Real-time from Lakehouse)
     try:
-        if TRAIN_DATA_PATH.exists():
-            feature_data = pd.read_parquet(TRAIN_DATA_PATH)
+        from src.utils.db_manager import fetch_ml_features
+        logger.info("Attempting to load feature data from Trino...")
+        feature_data = fetch_ml_features()
+        if not feature_data.empty:
             app.state.feature_data = feature_data
-            logger.info(f"✅ Feature data loaded successfully. Shape: {feature_data.shape}")
+            logger.info(f"✅ Feature data loaded from TRINO. Shape: {feature_data.shape}")
         else:
-            logger.error(f"❌ Feature file not found at: {TRAIN_DATA_PATH}")
-            app.state.feature_data = None
+            logger.warning("⚠️ Trino returned empty feature data.")
     except Exception as e:
-        logger.error(f"❌ Failed to load feature data: {str(e)}")
-        app.state.feature_data = None
+        logger.warning(f"⚠️ Trino loading failed ({str(e)}), falling back to local Parquet...")
+
+    # 2. Fallback to Local Parquet
+    if app.state.feature_data is None:
+        try:
+            if TRAIN_DATA_PATH.exists():
+                feature_data = pd.read_parquet(TRAIN_DATA_PATH)
+                app.state.feature_data = feature_data
+                logger.info(f"✅ Feature data loaded from PARQUET. Shape: {feature_data.shape}")
+            else:
+                logger.error(f"❌ Feature file not found at: {TRAIN_DATA_PATH}")
+                app.state.feature_data = None
+        except Exception as e:
+            logger.error(f"❌ Failed to load feature data from Parquet: {str(e)}")
+            app.state.feature_data = None
     
     yield
     

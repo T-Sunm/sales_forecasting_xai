@@ -39,9 +39,15 @@ def display_dependence_analysis(
     top_features = importance_df.head(10)['feature'].tolist()
     
     # Feature selector
+    default_feature = "logunits_lag_1"
+    default_idx = 0
+    if default_feature in top_features:
+        default_idx = top_features.index(default_feature)
+
     selected_feature = st.selectbox(
         "Select a feature to analyze:",
         top_features,
+        index=default_idx,
         help="Choose from top 10 most important features"
     )
     

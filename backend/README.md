@@ -14,7 +14,26 @@ FastAPI-based backend service for Sales Forecasting and XAI explanations.
 uv sync
 ```
 
-### 2. Run Server
+### 2. Start MLflow Tracking Server
+
+The backend loads the model via **MLflow Model Registry** (alias `@champion`). The MLflow server must be running before starting the backend, otherwise you will get a `WinError 10061 - connection refused` error on port 5000.
+
+```bash
+# Run from ../ml (relative to this backend/ folder)
+cd ../ml
+mlflow server --backend-store-uri sqlite:///mlflow.db --host 127.0.0.1 --port 5000
+```
+
+MLflow UI will be available at `http://127.0.0.1:5000`. The model registry must have a model named `sales-forecasting-lgbm` with an `@champion` alias. If not, run the training script first:
+
+```bash
+# Run from ../ml (relative to this backend/ folder)
+cd ../ml
+uv run python scripts/train.py
+```
+
+### 3. Run Server
+
 ```bash
 # Using Python script
 python run.py
@@ -22,6 +41,7 @@ python run.py
 # Or via Uvicorn directly
 uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
+
 The API documentation will be available at `http://localhost:8000/docs`.
 
 ## Data Platform Prerequisites

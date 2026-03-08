@@ -5,8 +5,11 @@ with weather_base as (
     w.date,
     k.store_id,
     w.station_id,
-    w.tmax, w.tmin, w.tavg, w.dewpoint, w.wetbulb,
-    w.preciptotal, w.snowfall, w.resultspeed, w.resultdir, w.avgspeed,
+    -- Numerical Features
+    w.tmax, w.tmin, w.tavg, w.depart, w.dewpoint, w.wetbulb, w.heat, w.cool,
+    w.sunrise, w.sunset, w.snowfall, w.preciptotal, w.stnpressure, w.sealevel,
+    w.resultspeed, w.resultdir, w.avgspeed,
+    -- Binary Flags (Weather Codes)
     coalesce(w.is_ra, 0) as is_ra,
     coalesce(w.is_sn, 0) as is_sn,
     coalesce(w.is_fg, 0) as is_fg,
@@ -16,19 +19,20 @@ with weather_base as (
     coalesce(w.is_dz, 0) as is_dz,
     coalesce(w.is_sq, 0) as is_sq,
     coalesce(w.is_fz, 0) as is_fz,
-    coalesce(w.is_vc, 0) as is_vc
+    coalesce(w.is_vc, 0) as is_vc,
+    coalesce(w.is_up, 0) as is_up,
+    coalesce(w.is_mi, 0) as is_mi,
+    coalesce(w.is_pr, 0) as is_pr,
+    coalesce(w.is_bc, 0) as is_bc,
+    coalesce(w.is_bl, 0) as is_bl
   from {{ ref('stg_key') }} k
   join {{ ref('int_weather_features') }} w
     on k.station_id = w.station_id
 )
 
 select
-  b.date,
-  b.store_id,
-  b.station_id,
-  p.weather_profile_key,
-  b.tmax, b.tmin, b.tavg, b.dewpoint, b.wetbulb,
-  b.preciptotal, b.snowfall, b.resultspeed, b.resultdir, b.avgspeed
+  b.*,
+  p.weather_profile_key
 from weather_base b
 left join {{ ref('dim_weather_profile') }} p
   on  b.is_ra = p.is_ra

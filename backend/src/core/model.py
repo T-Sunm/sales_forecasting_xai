@@ -109,7 +109,8 @@ class ModelManager:
     
     def __init__(self):
         self.model: Optional[Any] = None
-        
+        self._model_impl = None
+
     def load_models(self) -> bool:
         """
         Load trained model from MLflow Model Registry via @champion alias.
@@ -121,17 +122,22 @@ class ModelManager:
             mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
             model_uri = f"models:/{MLFLOW_REGISTERED_MODEL_NAME}@{MLFLOW_MODEL_ALIAS}"
             self.model = mlflow.pyfunc.load_model(model_uri)
+            # Extract raw LightGBM booster for SHAP compatibility
+            self._model_impl = self.model._model_impl.lgb_model
             return True
         except Exception:
             return False
     
     def get_feature_names(self) -> list:
+        """Get feature names from the underlying LightGBM model."""
+        return self._model_impl.feature_name_
+
+    def get_raw_model(self):
         """
-        Get model feature names from MLflow model signature.
-        Generic approach - works with any registered flavor.
+        Extract the underlying LightGBM booster from MLflow PyFunc wrapper.
+        Required for SHAP TreeExplainer which cannot work with PyFunc wrappers.
         """
-        sig = self.model.metadata.signature
-        return [inp.name for inp in sig.inputs]
+        return self._model_impl
     
     def get_model(self, store_id: int = None, item_id: int = None):
         """
