@@ -72,9 +72,7 @@ The infrastructure components communicate via a shared Docker network named `dat
 docker network create data_platform_net
 ```
 
-# 2. Start Infrastructure
-
-![Spark Cluster Dashboard](../assets/spark-cluster-dashboard.jpg)
+### 2. Start Infrastructure
 
 With the shared network created, you can now start the components in any order.
 
@@ -162,36 +160,31 @@ uv run dbt run
 - **Engine** dbt and Apache Spark
 - **Source** `dbt/sales_forecasting_lakehouse/models/marts/`
 
-## 🛠️ Technical Refinements (Airflow 3 + Spark 3.12)
+## Platform Architecture
 
-Recently, the platform was upgraded to ensure consistency and stability across the stack:
+### Spark Processing Cluster
 
-### 1. Python Environment Alignment
-- **Uniform Version:** Both Airflow (Driver) and Spark (Executors) now use **Python 3.12**.
-- **Spark Configuration:** Explicitly pointing Spark to the correct Python executable via:
-  - `spark.pyspark.python: "/usr/bin/python3.12"` (Executors)
-  - `spark.pyspark.driver.python: "python3"` (Driver - auto-resolves in Airflow PATH)
-- **Distutils Fix:** Python 3.12 removes `distutils`. We've patched this by upgrading `setuptools` and `wheel` in the Spark Dockerfile to provide a compatibility layer.
+![Spark Cluster Dashboard](../assets/spark-cluster-dashboard.jpg)
 
-### 2. Airflow 3 (Asset-Aware) Orchestration
-- **From Datasets to Assets:** Migrated from `airflow.datasets.Dataset` to `airflow.sdk.Asset`.
+The Airflow driver node and Spark executor nodes are aligned to use Python 3.12. The Spark configuration explicitly targets the correct Python executable paths for both environments. Because Python 3.12 removes the distutils module, the container build definitions upgrade setuptools and wheel to provide a necessary compatibility layer.
+
+### Airflow Asset Orchestration
 
 ![Airflow DAGs List](../assets/list_dags.jpg)
 
-- **Event Lookup:** In Airflow 3, `triggering_asset_events` lookup should be done by iterating and checking the `.uri` or using the URI string as a key to avoid `unhashable dict` errors when the asset carries metadata.
-- **Outlet Metadata:** Using Asset objects as keys in `context["outlet_events"]` to properly attach metadata (like `run_date`) for downstream consumers.
+The orchestration framework relies on the Airflow SDK Asset class rather than legacy Dataset objects. The triggering asset events lookup relies on iterative URI string matching to prevent dictionary hashing errors when analyzing asset metadata. The workflow applies Asset objects as dictionary keys to correctly distribute metadata across downstream consuming operations.
 
-#### Astronomer Cosmos Integration
-The platform utilizes Astronomer Cosmos to render dbt projects directly as Airflow Task Groups, allowing for fine-grained dependency management within the Lakehouse.
+Astronomer Cosmos parses dbt project definitions directly into Airflow execution groups. This design allows dependency management entirely inside the Data Lakehouse environment.
 
 ![dbt Cosmos DAG](../assets/airflow-dbt_cosmos-dag.jpg)
 
-### 3. Nessie Catalog & Iceberg Namespaces
-The architecture implements branching and versioning at the data layer using Apache Nessie.
+### Nessie Catalog
+
+The storage strategy implements data repository branching and active version control capabilities using Apache Nessie. 
 
 ![Nessie Catalog Namespaces](../assets/nessie-catalog-namespaces.jpg)
 
-- **Internal Connections** Airflow uses the centralized PostgreSQL instance to store task metadata and Nessie catalog versioning information.
+The architecture routes Airflow task states and Nessie catalog versioning logs into a unified internal PostgreSQL instance.
 
 ##  Resources
 
