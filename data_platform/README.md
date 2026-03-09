@@ -72,7 +72,9 @@ The infrastructure components communicate via a shared Docker network named `dat
 docker network create data_platform_net
 ```
 
-### 2. Start Infrastructure
+# 2. Start Infrastructure
+
+![Spark Cluster Dashboard](../assets/spark-cluster-dashboard.jpg)
 
 With the shared network created, you can now start the components in any order.
 
@@ -173,8 +175,21 @@ Recently, the platform was upgraded to ensure consistency and stability across t
 
 ### 2. Airflow 3 (Asset-Aware) Orchestration
 - **From Datasets to Assets:** Migrated from `airflow.datasets.Dataset` to `airflow.sdk.Asset`.
+
+![Airflow DAGs List](../assets/list_dags.jpg)
+
 - **Event Lookup:** In Airflow 3, `triggering_asset_events` lookup should be done by iterating and checking the `.uri` or using the URI string as a key to avoid `unhashable dict` errors when the asset carries metadata.
 - **Outlet Metadata:** Using Asset objects as keys in `context["outlet_events"]` to properly attach metadata (like `run_date`) for downstream consumers.
+
+#### Astronomer Cosmos Integration
+The platform utilizes Astronomer Cosmos to render dbt projects directly as Airflow Task Groups, allowing for fine-grained dependency management within the Lakehouse.
+
+![dbt Cosmos DAG](../assets/airflow-dbt_cosmos-dag.jpg)
+
+### 3. Nessie Catalog & Iceberg Namespaces
+The architecture implements branching and versioning at the data layer using Apache Nessie.
+
+![Nessie Catalog Namespaces](../assets/nessie-catalog-namespaces.jpg)
 
 - **Internal Connections** Airflow uses the centralized PostgreSQL instance to store task metadata and Nessie catalog versioning information.
 

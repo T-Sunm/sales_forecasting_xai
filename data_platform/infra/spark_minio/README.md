@@ -23,8 +23,6 @@ Crucially, Spark is heavily extended via `spark-defaults.conf` and downloaded JA
 
 ## Services & Ports
 
-![Spark Cluster Dashboard](../../../assets/spark-cluster-dashboard.jpg)
-
 Defined in `docker-compose.yml`:
 
 | Container | Image | Host Port | Description / Role |
@@ -53,8 +51,6 @@ Spark containers inherit the following variables dynamically via compose files:
 *   `SPARK_WORKER_MEMORY`: `4G` (Worker only)
 
 ### Spark Defaults (`spark-defaults.conf`)
-
-![Nessie Catalog Namespaces](../../../assets/nessie-catalog-namespaces.jpg)
 
 This configuration read-only mount maps into all Spark containers and Airflow workers. It controls the Iceberg mapping behavior rigorously:
 

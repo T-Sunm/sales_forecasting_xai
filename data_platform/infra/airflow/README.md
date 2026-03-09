@@ -140,8 +140,6 @@ These variables are **hardcoded** in `docker-compose.yaml` and are not overridab
 
 ## Asset-Driven Scheduling Architecture
 
-![Airflow DAGs List](../../../assets/list_dags.jpg)
-
 All pipeline inter-DAG dependencies are expressed via **Airflow Assets** (Airflow 3.x). The central definition file is `dags/datasets.py`.
 
 ### Asset Definitions
@@ -242,8 +240,6 @@ spark.driver.extraClassPath = /opt/airflow/jars/*
 | `catchup` | `False` |
 
 **What it does:** Runs the entire `sales_forecasting_lakehouse` dbt project via Astronomer Cosmos. Tests run after all models complete (`TestBehavior.AFTER_ALL`). On success, emits `DS_LAKEHOUSE_MART_READY` via a downstream `EmptyOperator`.
-
-![dbt Cosmos DAG](../../../assets/airflow-dbt_cosmos-dag.jpg)
 
 **Cosmos config:**
 
