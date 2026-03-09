@@ -10,7 +10,12 @@ Interactive dashboard for Sales Forecasting visualization and XAI insights.
   ![Sales Prediction Tools](../assets/sales_prediction_tools.jpg)
 
 - **XAI Dashboard**: Explanations for predictions using SHAP plots.
+
+  ![SHAP Value Analysis](../assets/shap_value.jpg)
+
 - **LLM Integration**: Natural language summary of model insights.
+
+  ![XAI VLMs Integration](../assets/xai_vlms.jpg)
 
 ## Prerequisites
 
