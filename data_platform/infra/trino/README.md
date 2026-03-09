@@ -28,7 +28,7 @@ The configuration is located in `etc/catalog/iceberg.properties`.
 ## Integration
 
 The backend connects to Trino using the following parameters:
-- **Host:** `localhost` (or `trino` inside docker network)
-- **Port:** `8085` (host) / `8080` (internal)
-- **Catalog:** `iceberg`
-- **Schema:** `sales_forecasting_warehouse.marts`
+- **Host** `localhost` or `trino` inside docker network
+- **Port** `8085` host / `8080` internal
+- **Catalog** `iceberg`
+- **Schema** `analytics`

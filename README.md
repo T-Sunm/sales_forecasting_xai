@@ -2,7 +2,7 @@
 
 ## Overview
 
-This repository hosts an end-to-end Walmart sales forecasting system combining a modern Lakehouse architecture with a comprehensive MLOps pipeline. The data platform leverages **MinIO** as the object storage, **Apache Iceberg** as the open table format, and **Nessie** for Git-like catalog versioning. Data ingestion and heavy feature engineering (such as Exponentially Weighted Moving Averages) are processed by **Apache Spark**, while **dbt** and **Apache Airflow** orchestrate resilient SQL transformations and pipeline scheduling. On the Machine Learning side, the pipeline utilizes **DVC** for data and artifact versioning, **MLflow** for experiment tracking, and **Optuna** for automated hyperparameter tuning. Finally, model predictions and Explainable AI (XAI) insights are served through a high-performance **FastAPI** backend and visualized in a **Streamlit** interactive dashboard.
+This repository hosts an end-to-end Walmart sales forecasting system combining a modern Lakehouse architecture with a comprehensive MLOps pipeline. The data platform leverages MinIO as the object storage, Apache Iceberg as the open table format, and Nessie as the catalog versioning. Apache Spark processes data ingestion and feature engineering while dbt and Apache Airflow orchestrate SQL transformations and pipeline scheduling. On the Machine Learning side, the pipeline utilizes DVC for data and artifact versioning, MLflow for experiment tracking, and Optuna for automated hyperparameter tuning. Model predictions and Explainable AI (XAI) insights are served through a high-performance Trino query engine, a FastAPI backend, and a Streamlit interactive dashboard.
 
 ## Architecture
 
@@ -12,13 +12,14 @@ This repository hosts an end-to-end Walmart sales forecasting system combining a
 
 | Module | Role | Link |
 |---|---|---|
-| `data_platform/` | Lakehouse infrastructure & orchestration pipelines | [Read](./data_platform/README.md) |
-| ├── `infra/` | Docker services & network overview | [Read](./data_platform/infra/README.md) |
+| `data_platform/` | Lakehouse infrastructure and orchestration pipelines | [Read](./data_platform/README.md) |
+| ├── `infra/` | Docker services and network overview | [Read](./data_platform/infra/README.md) |
 | │ ├── `spark_minio/` | Spark cluster, MinIO storage, Iceberg configuration | [Read](./data_platform/infra/spark_minio/README.md) |
 | │ ├── `nessie/` | Nessie Catalog for Iceberg | [Read](./data_platform/infra/nessie/README.md) |
+| │ ├── `trino/` | Trino Query Engine for analytical serving | [Read](./data_platform/infra/trino/README.md) |
 | │ ├── `airflow/` | Airflow orchestration (CeleryExecutor) | [Read](./data_platform/infra/airflow/README.md) |
-| │ └── `postgres/` | Airflow metadata DB & Nessie JDBC backend | [Read](./data_platform/infra/postgres/README.md) |
-| ├── `dbt/` | dbt data models (Lakehouse vs Warehouse) | [Read](./data_platform/dbt/README.md) |
+| │ └── `postgres/` | Nessie and Airflow metadata database | [Read](./data_platform/infra/postgres/README.md) |
+| ├── `dbt/` | dbt data models | [Read](./data_platform/dbt/README.md) |
 | └── `spark/` | PySpark ingestion & specific feature engineering jobs | [Read](./data_platform/spark/README.md) |
 | `ml/` | ML training algorithms, Optuna tuning, MLflow tracking | [Read](./ml/README.md) |
 | `shared/` | DVC pipeline execution & shared artifacts | [Read](./shared/README.md) |
@@ -40,7 +41,7 @@ sales_forecasting_xai/
 └── shared/                 # DVC stages (dvc.yaml), parameters (params.yaml)
 ```
 
-## Quickstart (Local/Dev)
+## Quickstart Local Development
 
 ### Assumptions & Prerequisites
 
@@ -52,13 +53,13 @@ sales_forecasting_xai/
 
 ### Minimum Happy Path
 
-The container cluster must be started in a specific sequence to satisfy runtime dependencies: **PostgreSQL → Nessie → Spark & MinIO → Airflow**. Once the infrastructure is completely ready, we trigger the DVC pipeline to run data transformations and train the machine learning models. Afterward, we start the API backend and the app UI.
+The container cluster must be started in a specific sequence to satisfy runtime dependencies starting from PostgreSQL, Nessie, Spark, MinIO, Trino, and then Airflow. Once the infrastructure is ready, the DVC pipeline runs data transformations and trains the machine learning models. Afterward, the API backend and the application UI are initialized.
 
 ```fish
 # 1. Create the shared external network
 docker network create data_platform_net
 
-# 2. Start PostgreSQL (Backend for Airflow & Nessie)
+# 2. Start PostgreSQL (Metadata Store)
 cd data_platform/infra/postgres; and docker compose up -d
 
 # 3. Start Nessie Catalog
@@ -67,10 +68,13 @@ cd ../nessie; and docker compose up -d
 # 4. Start Spark Cluster and MinIO
 cd ../spark_minio; and docker compose up -d
 
-# 5. Initialize and start Apache Airflow
+# 5. Start Trino Query Engine
+cd ../trino; and docker compose up -d
+
+# 6. Initialize and start Apache Airflow
 cd ../airflow; and docker compose up airflow-init; and docker compose up -d
 
-# 6. Start the MLflow tracking server locally (run in a separate terminal context)
+# 6. Start the MLflow tracking server locally in a separate terminal context
 # cd ../../../../
 # set -x MLFLOW_TRACKING_URI http://127.0.0.1:5000
 # set -x MLFLOW_S3_ENDPOINT_URL http://localhost:9000
@@ -79,10 +83,10 @@ cd ../airflow; and docker compose up airflow-init; and docker compose up -d
 # 7. Run the DVC pipeline to execute data preparation, tuning, and training stages
 cd ../../../shared; and dvc repro
 
-# 8. Start the FastAPI backend system (run in a separate terminal context)
+# 8. Start the FastAPI backend system in a separate terminal context
 cd ../backend; and uv run uvicorn src.api.main:app --reload --port 8000
 
-# 9. Start the Streamlit visualization application (run in a separate terminal context)
+# 9. Start the Streamlit visualization application in a separate terminal context
 cd ../frontend; and uv run streamlit run src/app.py
 ```
 
@@ -111,10 +115,10 @@ The project predominantly utilizes an `.env` file located exclusively at the roo
 
 ## Decision Log
 
-*   **Why Iceberg / Nessie / MinIO?** Apache Iceberg facilitates core ACID transactions and safe schema evolutions on large data lakes; Nessie injects Git-like catalog branching features avoiding storage duplication; MinIO dynamically replicates an underlying high-performance, S3-compatible local testing object storage format without needing AWS.
-*   **Why connect dbt with a Spark Thrift target?** Providing a Thrift JDBC/ODBC endpoint intrinsically allows dbt to directly schedule and submit advanced distributed SQL statement transformations across our data platform workers without integrating a discrete data warehouse processing engine.
-*   **Why DVC + MLflow + Optuna?** DVC robustly locks down specific iterations for massive datasets and exported model objects over time; MLflow tightly centralizes complex training metrics metadata dashboards dynamically; Optuna effortlessly automates resilient and statistically profound hyperparameter sweeping alongside nested MLflow metric aggregations intuitively.
-*   **Why FastAPI + Streamlit?** FastAPI ships with unparalleled async endpoints ideally suited to wrap rapid ML models predictions alongside dense backend Explainable AI structures; paired with Streamlit, it enables code-agnostic creation of compelling real-time frontend charts to elegantly simplify the visual delivery processes.
+*   **Why Iceberg, Nessie, and MinIO?** Apache Iceberg facilitates core ACID transactions and schema evolutions on large data lakes. Nessie provides catalog branching features to avoid storage duplication. MinIO replicates an underlying high-performance, S3-compatible local object storage format.
+*   **Why Trino and Spark?** Apache Spark provides a robust compute engine for transformation workloads due to built-in fault tolerance. Trino enables low-latency analytical queries on the Gold layer for model training and API serving.
+*   **Why DVC, MLflow, and Optuna?** DVC tracks specific iterations for large datasets and exported model objects. MLflow centralizes training metrics metadata dashboards. Optuna automates hyperparameter sweeping alongside nested MLflow metric aggregations.
+*   **Why FastAPI and Streamlit?** FastAPI provides asynchronous endpoints to serve project predictions and Explainable AI structures. Streamlit enables the creation of real-time frontend charts for visual delivery.
 
 ## What to Read Next
 

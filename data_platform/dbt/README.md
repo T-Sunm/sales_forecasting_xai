@@ -1,19 +1,18 @@
 # dbt — Data Transformations
 
-> **Scope:** This directory contains two independent dbt projects that transform raw and engineered data into analytics-ready layer. They share the same physical folder but target different compute engines and schemas.
+> **Scope** This directory contains the dbt project orchestrating the transformation of raw and engineered data into the analytics-ready layer using Apache Spark.
 
 ---
 
 ## Overview
 
-The data platform uses **two separate dbt projects** with distinct responsibilities and backends:
+The data platform utilizes a single dbt project targeting the Spark compute engine:
 
 | Project | Target engine | Output format | Namespace |
 |---|---|---|---|
-| [`sales_forecasting_lakehouse`](./sales_forecasting_lakehouse/) | Apache Spark (via Thrift) | **Apache Iceberg tables** | `nessie.default.*` / `nessie.analytics.*` |
-| [`sales_forecasting_warehouse`](./sales_forecasting_warehouse/) | PostgreSQL | Standard Postgres tables | `sales_forecasting` DB (TODO: confirm schema name) |
+| [`sales_forecasting_lakehouse`](./sales_forecasting_lakehouse/) | Apache Spark via Thrift | **Apache Iceberg tables** | `nessie.default.*` and `nessie.analytics.*` |
 
-The **lakehouse project** is the primary project. It transforms Parquet files from MinIO into a fully featured star schema with ML-ready features, storing results as versioned Iceberg tables tracked by Nessie. The **warehouse project** reads from the lakehouse's mart tables and materializes flattened serving views into PostgreSQL for the FastAPI backend to query directly.
+The lakehouse project transforms Parquet files from MinIO into a fully featured star schema and ML-ready features. It stores results as versioned Iceberg tables tracked by Nessie.
 
 ---
 
@@ -21,8 +20,7 @@ The **lakehouse project** is the primary project. It transforms Parquet files fr
 
 ### `sales_forecasting_lakehouse`
 
-Performs the full transformation chain from raw Parquet to analytics mart:
-**TODO:**
+Performs the full transformation chain from raw Parquet to analytics mart datasets.
 
 ---
 
@@ -62,34 +60,12 @@ Performs the full transformation chain from raw Parquet to analytics mart:
 | `dim_store` | Store → weather station mapping |
 | `dim_weather_profile` | Deduped weather condition profiles (OHE flags) |
 
-> **EWMA join in `fact_sales_item_daily`:** The mart reads EWMA features directly from MinIO Parquet (`parquet.\`s3a://datalake/intermediate/int_sales_with_ewma\``) because EWMA requires sequential per-partition `applyInPandas` — not expressible in Spark SQL. This is the only external Parquet reference in the mart layer. Source: `marts/fact_sales_item_daily.sql` line 28.
-
----
-
-## Model Inventory — Warehouse
-
-| Model | Materialization | Key purpose |
-|---|---|---|
-| `dim_date/item/store/dim_weather_profile` | `table` | Mirror from lakehouse |
-| `fact_sales_item_daily` / `fact_store_weather_daily` | `table` | Mirror from lakehouse |
-| `serving/mart_sales_base` | `table` | `(date, store_id, item_id, units)` — source for FastAPI |
-| `serving/mart_date_sales` | `table` | Daily aggregated sales |
-| `serving/mart_store_day` | `table` | Store × day rollup |
-
-### dbt packages used (warehouse only)
-
-| Package | Version | Purpose |
-|---|---|---|
-| `dbt-labs/codegen` | 0.12.0 | Auto-generate model YAML from SQL |
-| `omnata-labs/dbt_ml_preprocessing` | 1.1.0 | ML preprocessing macros |
-| `dbt-labs/dbt_utils` | 1.3.3 | General SQL utilities |
-
-> Source: `sales_forecasting_warehouse/packages.yml`.
+> **EWMA join in fact_sales_item_daily** The mart reads EWMA features directly from MinIO Parquet `parquet.s3a://datalake/intermediate/int_sales_with_ewma` because EWMA requires sequential per-partition `applyInPandas` which is not expressible in Spark SQL. This is the only external Parquet reference in the mart layer.
 
 ---
 
 ## ERD — Lakehouse Mart
-**TODO:**
+**TODO**
 
 ---
 
@@ -129,12 +105,11 @@ This means:
 
 ### Python Environment
 
-Both projects share the same `pyproject.toml` at `data_platform/dbt/`:
+The unified data transformation layer defines its environment requirements in `pyproject.toml` located at `data_platform/dbt/`.
 
 | Dependency | Version |
 |---|---|
 | `dbt-core` | `~=1.8.0` |
-| `dbt-postgres` | `~=1.8.0` |
 | `dbt-spark[pyhive]` | `>=1.10.1` |
 
 ---
@@ -177,12 +152,12 @@ uv run dbt run --select marts.* --target local --profiles-dir .
 
 | Component | Direction | Mechanism |
 |---|---|---|
-| MinIO (`s3a://datalake/staging/parquet/`) | ← reads | `stg_*` models query Parquet directly via Spark SQL `parquet.\`s3a://...\`` |
-| MinIO (`s3a://datalake/intermediate/int_sales_with_ewma`) | ← reads | `fact_sales_item_daily` joins EWMA Parquet directly |
-| Spark Thrift Server (`:10001`) | → executes on | dbt submits all SQL via JDBC Thrift; Spark executes distributed |
+| MinIO `s3a://datalake/staging/parquet/` | ← reads | Staging models query Parquet directly via Spark SQL |
+| MinIO `s3a://datalake/intermediate/int_sales_with_ewma` | ← reads | `fact_sales_item_daily` joins EWMA Parquet directly |
+| Spark Thrift Server `:10001` | → executes on | dbt submits all SQL via JDBC Thrift |
 | Nessie Catalog | → writes to | Mart Iceberg tables land in `nessie.analytics.*` via Spark catalog |
-| Airflow Cosmos (`consumer_lakehouse_pipeline` DAG) | ← triggered by | Cosmos `DbtTaskGroup` wraps each model as an Airflow task |
-| FastAPI backend | ← reads warehouse | `mart_sales_base`, `mart_store_day`, `mart_date_sales` via Postgres |
+| Airflow Cosmos | ← triggered by | Cosmos `DbtTaskGroup` wraps each model as an Airflow task |
+| FastAPI backend | ← reads | Trino serves requests querying Iceberg directly |
 
 ---
 
@@ -193,8 +168,8 @@ uv run dbt run --select marts.* --target local --profiles-dir .
 | [../README.md](../README.md) | Data Platform overview |
 | [../infra/README.md](../infra/README.md) | Infra overview, startup order |
 | [../infra/spark_minio/README.md](../infra/spark_minio/README.md) | Spark cluster and Iceberg config |
-| [../infra/nessie/README.md](../infra/nessie/README.md) | Nessie catalog setup (namespaces must exist before dbt runs) |
-| [../infra/airflow/README.md](../infra/airflow/README.md) | Cosmos DAG that runs this dbt project |
-| [../infra/postgres/README.md](../infra/postgres/README.md) | Postgres target for warehouse project |
+| [../infra/nessie/README.md](../infra/nessie/README.md) | Nessie catalog setup |
+| [../infra/airflow/README.md](../infra/airflow/README.md) | Cosmos DAG orchestrating this dbt project |
+| [../infra/trino/README.md](../infra/trino/README.md) | Trino query engine setup for downstream reading |
 | [../spark/README.md](../spark/README.md) | PySpark jobs that produce Parquet inputs read by `stg_*` and EWMA join |
 | [../../../README.md](../../../README.md) | Root project overview |

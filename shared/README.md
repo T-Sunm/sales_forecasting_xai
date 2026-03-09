@@ -6,9 +6,9 @@
 
 ## Overview
 
-`shared/` is the central coordination point between the data preparation step (reading from PostgreSQL/Kaggle CSV), the ML model training pipeline (`ml/`), and the served artifacts consumed by `backend/`. DVC tracks every file's MD5 checksum and associates exact parameter values with each pipeline run, making every experiment fully reproducible from a single `dvc repro` command.
+The shared directory serves as the coordination point between data preparation from the Trino analytical engine and the ML model training pipeline. DVC tracks all file checksums and associates exact parameter values with each pipeline run. This makes every experiment fully reproducible from a single command.
 
-The DVC remote is **MinIO** (S3-compatible), storing cached artifacts at `s3://dvc-store/sales_forecasting_xai/shared`. Credentials for the remote are stored in `.dvc/config.local` (not committed to git).
+The DVC remote is MinIO storing cached artifacts at `s3://dvc-store/sales_forecasting_xai/shared`. Credentials for the remote are stored locally in `.dvc/config.local` and are not committed to source control.
 
 ---
 
@@ -61,19 +61,19 @@ DVC automatically determines which stages are stale based on changed deps, param
 |---|---|
 | Command | `cd ../ml && uv run python -m scripts.prepare_data` |
 | Dependencies | `../ml/scripts/prepare_data.py`, `data/data_raw/test.csv` |
-| Parameters read | `prepare.cutoff_date` (from `params.yaml`) |
+| Parameters read | `prepare.cutoff_date` from `params.yaml` |
 | Outputs | `data/processed/train.parquet`, `valid.parquet`, `test.parquet` |
 
-**What it does:**
-1. Reads feature matrix from PostgreSQL (`marts.sales_forecast JOIN marts.dim_date`).
+**What it does**
+1. Reads feature matrix from the Trino Iceberg catalog.
 2. Reads Kaggle test IDs from `data/data_raw/test.csv`.
-3. Splits on `prepare.cutoff_date` (`2014-08-01`):
-   - `train`: rows before cutoff, non-Kaggle
-   - `valid`: rows after cutoff, non-Kaggle
-   - `test`: rows flagged `is_kaggle_test=1`
-4. Saves as Parquet to `data/processed/`.
+3. Splits on `prepare.cutoff_date` value
+   - `train` rows before cutoff non-Kaggle
+   - `valid` rows after cutoff non-Kaggle
+   - `test` rows flagged `is_kaggle_test=1`
+4. Saves as Parquet format to the processed directory.
 
-> Source: `ml/scripts/prepare_data.py`. Connects to `POSTGRES_HOST:5432/sales_forecasting` using `.env` vars.
+> Source `ml/scripts/prepare_data.py` connects to Trino gateway `TRINO_HOST:8085` using environment variables.
 
 ---
 
@@ -205,9 +205,9 @@ uv sync
 ### Prerequisites
 
 - MinIO running at `localhost:9000` with bucket `dvc-store` created.
-- PostgreSQL running at `POSTGRES_HOST:5432` with `sales_forecasting` DB populated (mart tables from dbt).
-- MLflow server running at `MLFLOW_TRACKING_URI` (for `tune` and `train` stages).
-- `.env` at project root with `POSTGRES_*`, `MLFLOW_TRACKING_URI`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`.
+- Trino running at `TRINO_HOST:8085` with Iceberg mart tables populated by dbt.
+- MLflow server running at `MLFLOW_TRACKING_URI` for tracking output.
+- Environment variables configured at project root including `TRINO_*`, `MLFLOW_TRACKING_URI`, `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY`.
 
 ### Full pipeline run
 
@@ -281,9 +281,9 @@ dvc repro
 | `ml/scripts/tune.py` | → reads from | `data/processed/train.parquet`, `data/processed/valid.parquet`; writes `outputs/tuning/best_params.json` |
 | `ml/scripts/train.py` | → reads from | `data/processed/train.parquet`, `data/processed/valid.parquet`, `outputs/tuning/best_params.json`; writes `models/lgbm_baseline.pkl` |
 | `backend/` | ← reads from | `models/lgbm_baseline.pkl` to serve predictions |
-| MinIO DVC remote | push/pull | `s3://dvc-store/sales_forecasting_xai/shared` via `dvc-s3` |
+| MinIO DVC remote | push and pull | `s3://dvc-store/sales_forecasting_xai/shared` via `dvc-s3` |
 | MLflow | → logs to | `tune` and `train` stages log metrics and artifacts to `MLFLOW_TRACKING_URI` |
-| PostgreSQL (`prepare_data`) | ← reads from | `POSTGRES_HOST:5432/sales_forecasting` — mart tables populated by dbt warehouse project |
+| Trino | ← reads from | `TRINO_HOST:8085` with mart tables populated by dbt lakehouse project |
 
 ---
 
@@ -291,9 +291,9 @@ dvc repro
 
 | Link | Coverage |
 |---|---|
-| [../ml/README.md](../ml/README.md) | ML scripts invoked by DVC stages (train, tune, prepare_data) |
-| [../data_platform/dbt/README.md](../data_platform/dbt/README.md) | dbt warehouse project that populates the DB read by prepare_data |
-| [../data_platform/infra/postgres/README.md](../data_platform/infra/postgres/README.md) | PostgreSQL setup that stores dbt mart tables |
-| [../data_platform/infra/spark_minio/README.md](../data_platform/infra/spark_minio/README.md) | MinIO that hosts the DVC remote (`dvc-store`) |
+| [../ml/README.md](../ml/README.md) | ML scripts invoked by DVC stages |
+| [../data_platform/dbt/README.md](../data_platform/dbt/README.md) | dbt lakehouse project that populates Iceberg tables read by prepare_data |
+| [../data_platform/infra/trino/README.md](../data_platform/infra/trino/README.md) | Trino query engine setup |
+| [../data_platform/infra/spark_minio/README.md](../data_platform/infra/spark_minio/README.md) | MinIO infrastructure hosting the DVC remote |
 | [../backend/README.md](../backend/README.md) | FastAPI backend that loads `models/lgbm_baseline.pkl` |
 | [../README.md](../README.md) | Root project overview and quickstart |

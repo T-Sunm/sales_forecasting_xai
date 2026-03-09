@@ -1,32 +1,31 @@
 # Data Platform (Lakehouse Architecture)
 
-This project implements a modern data platform using **Spark + MinIO (Data Lake)** and **dbt + PostgreSQL (Data Warehouse)**.
+This project implements a modern data platform using Spark and MinIO for the Data Lake.
 
-## 🏗️ Architecture Overview
+## Architecture Overview
 
 ```
-Raw CSV → MinIO (Bronze) → Spark Staging → MinIO (Silver) → Spark Intermediate → MinIO (Gold) → PostgreSQL → dbt Marts
+Raw CSV → MinIO Bronze → Spark Staging → MinIO Silver → Spark Intermediate → MinIO Gold → dbt Iceberg
 ```
 
 ### Components
 
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
-| **Data Lake** | MinIO | Object storage for Bronze/Silver/Gold layers |
-| **Processing** | Spark | Distributed data transformation |
-| **Data Warehouse** | PostgreSQL | Serving layer for analytics |
-| **Transformation** | dbt | Star schema modeling |
-| **Orchestration** | Airflow | Workflow scheduling |
+| **Data Lake** | MinIO | Object storage for Bronze, Silver, and Gold layers |
+| **Processing** | Spark | Distributed data transformation engine |
+| **Orchestration** | Airflow | Workflow scheduling and dependency management |
+| **Metadata** | PostgreSQL | Metadata store for Nessie and Airflow |
 
 ## 📂 Project Structure
 
 ```text
 data_platform/
 ├── infra/                              # Infrastructure
+│   ├── trino/
+│   │   └── docker-compose.yml          # Trino for analytical serving
 │   ├── postgres/
-│   │   ├── docker-compose.yml
-│   │   └── scripts/
-│   │       └── load_from_minio.py      # Load Gold → PostgreSQL
+│   │   └── docker-compose.yml          # Metadata store
 │   └── spark_minio/
 │       ├── docker-compose.yml
 │       ├── Dockerfile
@@ -49,13 +48,10 @@ data_platform/
 │   └── airflow/
 │       └── dags/
 │
-├── dbt/
-│   ├── sales_forecasting/              # [LEGACY] Pure dbt implementation
-│   └── sales_forecasting_warehouse/    # [NEW] Lakehouse + dbt
+│   └── sales_forecasting_lakehouse/    # Lakehouse models using Spark
 │       ├── models/
-│       │   ├── sources/                # Sources from Gold layer
-│       │   └── marts/
-│       │       └── star_schema/        # Fact & Dimension tables
+│       │   ├── marts/                  # Analytics ready Iceberg tables
+│       │   └── staging/                # Initial cleaning models
 │       ├── seeds/
 │       ├── tests/
 │       └── macros/
@@ -81,15 +77,19 @@ docker network create data_platform_net
 With the shared network created, you can now start the components in any order.
 
 ```powershell
-# 1. Start Spark + MinIO
+# 1. Start Spark and MinIO
 cd infra/spark_minio
 docker-compose up -d
 
-# 2. Start PostgreSQL (Data Warehouse)
+# 2. Start PostgreSQL (Metadata Store)
 cd infra/postgres
 docker-compose up -d
 
-# 3. Start Airflow (Orchestrator)
+# 3. Start Trino (Serving Engine)
+cd infra/trino
+docker-compose up -d
+
+# 4. Start Airflow (Orchestrator)
 cd infra/airflow
 docker-compose up -d
 ```
@@ -107,24 +107,17 @@ uv run python infra/spark_minio/scripts/load_holidays.py
 ### 3. Run Spark Jobs
 
 ```powershell
-# Staging: Bronze → Silver
+# Staging transformation from Bronze to Silver
 spark-submit spark/jobs/staging/sales_staging.py
 
-# Intermediate: Silver → Gold
+# Intermediate transformation from Silver to Gold
 spark-submit spark/jobs/intermediate/sales_features.py
 ```
 
-### 4. Load to PostgreSQL
+### 4. Run dbt (Manual)
 
 ```powershell
-# Load Gold data to PostgreSQL
-uv run python infra/postgres/scripts/load_from_minio.py
-```
-
-### 6. Run dbt (Manual)
-
-```powershell
-cd dbt/sales_forecasting_warehouse
+cd dbt/sales_forecasting_lakehouse
 uv run dbt run
 ```
 
@@ -160,12 +153,12 @@ uv run dbt run
   - Weather integration
 - **Source**: `spark/jobs/intermediate/`
 
-### Marts Layer (Star Schema)
-- **Storage**: PostgreSQL
-- **Format**: Tables
-- **Content**: Dimensional model for BI tools
-- **Transformations**: Fact & Dimension tables
-- **Source**: `dbt/sales_forecasting_warehouse/models/marts/`
+### Marts Layer Iceberg Tables
+- **Storage** MinIO
+- **Format** Apache Iceberg
+- **Content** Analytical datasets ready for Machine Learning and BI
+- **Engine** dbt and Apache Spark
+- **Source** `dbt/sales_forecasting_lakehouse/models/marts/`
 
 ## 🛠️ Technical Refinements (Airflow 3 + Spark 3.12)
 
@@ -183,37 +176,9 @@ Recently, the platform was upgraded to ensure consistency and stability across t
 - **Event Lookup:** In Airflow 3, `triggering_asset_events` lookup should be done by iterating and checking the `.uri` or using the URI string as a key to avoid `unhashable dict` errors when the asset carries metadata.
 - **Outlet Metadata:** Using Asset objects as keys in `context["outlet_events"]` to properly attach metadata (like `run_date`) for downstream consumers.
 
-### 3. Integrated Connectivity
-- **postgres_dw Connection:** Added as an environment variable in `infra/airflow/docker-compose.yaml` to ensure Cosmos (dbt) and Spark jobs consistently point to the Data Warehouse container (`postgres_container`).
-  - `AIRFLOW_CONN_POSTGRES_DW`: `postgresql://postgres:changeme@postgres_container:5432/sales_forecasting`
+- **Internal Connections** Airflow uses the centralized PostgreSQL instance to store task metadata and Nessie catalog versioning information.
 
-## 🔄 Migration Notes
-
-### Legacy Implementation (dbt-only)
-The original implementation in `dbt/sales_forecasting/` used pure dbt for all transformations:
-- Staging layer: SQL-based cleaning
-- Intermediate layer: SQL window functions for features
-- Marts layer: Star schema
-
-**Limitations**:
-- Limited scalability with large datasets
-- Complex window functions in SQL
-- All processing in PostgreSQL
-
-### New Implementation (Lakehouse)
-The new implementation in `dbt/sales_forecasting_warehouse/` separates concerns:
-- **Spark**: Heavy-lifting transformations (staging + intermediate)
-- **dbt**: Final star schema modeling
-- **MinIO**: Scalable object storage
-- **PostgreSQL**: Serving layer only
-
-**Benefits**:
-- Horizontally scalable with Spark
-- Better separation of concerns
-- Reusable Spark libraries
-- Easier to test and maintain
-
-## 📚 Resources
+##  Resources
 
 - [dbt Documentation](https://docs.getdbt.com/)
 - [Apache Spark Documentation](https://spark.apache.org/docs/latest/)

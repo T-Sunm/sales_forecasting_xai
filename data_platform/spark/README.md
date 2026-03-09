@@ -63,15 +63,15 @@ The `src/utils.py` module provides reusable functions:
 - `one_hot_encode_column()` - One-hot encoding
 - `filter_by_total_threshold()` - Partition-based filtering
 
-## Migration from dbt
+## Migration from legacy project
 
-This Spark implementation replaces the staging and intermediate layers from the legacy dbt project:
+This Spark implementation replaces the staging and intermediate layers from the legacy transformation project
 
-| Layer | Old (dbt) | New (Spark) |
+| Layer | Legacy | Current Lakehouse |
 |-------|-----------|-------------|
-| Staging | `dbt/sales_forecasting/models/staging/` | `spark/jobs/staging/` |
-| Intermediate | `dbt/sales_forecasting/models/intermediate/` | `spark/jobs/intermediate/` |
-| Marts | `dbt/sales_forecasting/models/marts/` | `dbt/sales_forecasting_warehouse/models/marts/` |
+| Staging | legacy staging models | `spark/jobs/staging/` |
+| Intermediate | legacy intermediate models | `spark/jobs/intermediate/` |
+| Marts | legacy marts layer | `dbt/sales_forecasting_lakehouse/models/marts/` |
 
 ## Development
 

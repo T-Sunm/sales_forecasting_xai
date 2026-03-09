@@ -1,14 +1,14 @@
 # Machine Learning Engineering Core
 
-> **Scope:** This directory houses the core Machine Learning pipelines for the sales forecasting system. It leverages `LightGBM` for regression, `Optuna` for hyperparameter tuning, and `MLflow` for experiment tracking. These scripts are designed to be orchestrated by DVC (from the `shared/` directory) or run locally via the `mlflow CLI`.
+> **Scope** This directory houses the core Machine Learning pipelines for the sales forecasting system. It leverages LightGBM for regression, Optuna for hyperparameter tuning, and MLflow for experiment tracking. These scripts are designed to be orchestrated by DVC from the shared directory or run locally via the mlflow CLI.
 
 ---
 
 ## Overview
 
-The `ml/` module standardises the model building lifecycle using an **MLproject** definition. The flow covers extracting processed features from the **Data Lakehouse (Iceberg Gold Layer)** via **Trino**, splitting data based on time cutoffs, discovering optimal hyperparameters via Bayesian optimization (Optuna), and producing a finalized LightGBM model artifact (`.pkl`).
+The ml module standardizes the model building lifecycle using an MLproject definition. The flow covers extracting processed features from the Iceberg Gold layer via Trino. Operations include splitting data based on time cutoffs, discovering hyperparameters via Optuna, and producing a finalized LightGBM model artifact with pkl extension.
 
-All experiments, parameters, and metrics are meticulously tracked using MLflow, with nested runs for Optuna trials to keep the experiment UI clean and traceable.
+Experiment tracking occurs in MLflow with nested runs for Optuna trials to maintain traceable logs.
 
 ---
 
@@ -34,9 +34,9 @@ ml/
 
 ## Responsibilities
 
-1. **`prepare_data`**: Connects to the **Trino** gateway, joins Gold Layer tables (`fact_sales_item_daily`, `fact_store_weather_daily`, `dim_date`) in the `iceberg.analytics` schema. It fetches **74+ features** (including detailed weather flags and rolling sales metrics), applies Kaggle test ID masking, and splits data temporally.
-2. **`tune`**: Reads Parquet files, establishes an `optuna.create_study`, and iteratively suggests parameters across a defined search space (`tuning/objective.py`). Each trial is logged as a *nested* child run under a parent MLflow study. Outputs JSON payload containing the `best_params`.
-3. **`train`**: Merges default static hyperparams (from `params.yaml`) with tuned `best_params.json` to fit a final LightGBM Regressor. Automatically logs metrics (`val_rmsle`, `val_mae`) and model artifacts to the MLflow Model Registry under the `@champion` alias.
+1. **prepare_data** Connects to the Trino gateway to join Gold layer tables including fact_sales_item_daily and fact_store_weather_daily. This provides over 74 features for the training session and applies Kaggle test ID masking.
+2. **tune** Reads dataset files and executes an Optuna study to optimize model parameters. Each trial is logged as a child run under a parent MLflow study.
+3. **train** Fits a final LightGBM Regressor based on best parameters. The resulting model is logged to the MLflow Model Registry.
 
 ---
 
@@ -52,7 +52,7 @@ This module relies on environment variables loaded from the root `.env`.
 | `AWS_ACCESS_KEY_ID` | MinIO access key for artifact upload | `minioadmin` |
 | `AWS_SECRET_ACCESS_KEY` | MinIO secret key for artifact upload | `minioadmin` |
 
-### Lakehouse Connection (Trino)
+### Lakehouse Connection Trino
 | Variable | Usage | Default |
 |---|---|---|
 | `TRINO_USER` | Trino User | `admin` |

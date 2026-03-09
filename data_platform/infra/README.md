@@ -9,7 +9,7 @@
 The infra layer is composed of **four independent Compose stacks** that must be started in a specific order because of hard runtime dependencies:
 
 ```
-postgres → nessie → spark_minio → airflow
+postgres → nessie → spark_minio → trino → airflow
 ```
 
 All four stacks share a single external Docker network (`data_platform_net`) that must be created manually before any stack is launched. The network boundary is the only coupling between stacks; each stack is otherwise self-contained.
@@ -20,10 +20,11 @@ All four stacks share a single external Docker network (`data_platform_net`) tha
 
 | Sub-directory | What it owns |
 |---|---|
-| [`postgres/`](./postgres/) | Central PostgreSQL 16 instance + pgAdmin UI. Serves as (1) Airflow's metadata database and (2) Nessie's JDBC version-store backend. |
-| [`nessie/`](./nessie/) | Project Nessie catalog server — provides Git-like branching for Apache Iceberg tables stored in MinIO. |
-| [`spark_minio/`](./spark_minio/) | Apache Spark cluster (master + worker + Thrift server) and MinIO object storage. Iceberg runtime and Nessie extensions are baked into the custom Spark image. |
-| [`airflow/`](./airflow/) | Apache Airflow 3.1.6 with CeleryExecutor (scheduler, worker, triggerer, dag-processor, api-server) + internal Redis broker + internal Postgres for Airflow metadata. The custom image also bundles dbt-spark, Astronomer Cosmos, and JARs for Spark driver-side execution. |
+| [`postgres/`](./postgres/) | Central PostgreSQL 16 instance and pgAdmin UI. Serves as Airflow metadata database and Nessie JDBC version-store backend. |
+| [`nessie/`](./nessie/) | Project Nessie catalog server — provides branching for Apache Iceberg tables stored in MinIO. |
+| [`spark_minio/`](./spark_minio/) | Apache Spark cluster and MinIO object storage. Iceberg runtime and Nessie extensions are integrated into the custom Spark image. |
+| [`trino/`](./trino/) | Trino analytical engine for executing high-performance SQL queries over Iceberg tables. |
+| [`airflow/`](./airflow/) | Apache Airflow 3.1.6 with CeleryExecutor and internal core services. The custom image bundles dbt-spark and Astronomer Cosmos. |
 
 ---
 
@@ -33,10 +34,10 @@ All four stacks share a single external Docker network (`data_platform_net`) tha
 
 | Container | Image | Host Port | Role |
 |---|---|---|---|
-| `postgres_container` | `postgres:16-alpine` | `5432` | SQL database — Nessie JDBC backend + sales DW |
-| `pgadmin_container` | `dpage/pgadmin4:9.11` | `5050` (default) | pgAdmin web UI |
+| `postgres_container` | `postgres:16-alpine` | `5432` | SQL database for Nessie JDBC backend and Airflow metadata |
+| `pgadmin_container` | `dpage/pgadmin4:9.11` | `5050` | pgAdmin web UI |
 
-> Source: `postgres/docker-compose.yml` lines 4–36.
+> Source: `postgres/docker-compose.yml`
 
 ### `nessie/` stack
 
@@ -119,8 +120,6 @@ Additional variables are hardcoded in the compose `environment` block and are **
 | `AIRFLOW__DATABASE__SQL_ALCHEMY_CONN` | `postgresql+psycopg2://airflow:airflow@postgres/airflow` | Airflow internal DB |
 | `AIRFLOW__CELERY__BROKER_URL` | `redis://:@redis:6379/0` | Celery broker |
 | `S3_ENDPOINT` | `http://minio:9000` | MinIO reachable from within the compose network |
-| `AIRFLOW_CONN_POSTGRES_DW` | `postgresql://postgres:changeme@postgres_container:5432/sales_forecasting` | Connection for DAG tasks |
-| `PG_HOST / PG_USER / PG_PASS / PG_DB` | `postgres_container` / `postgres` / `changeme` / `sales_forecasting` | Passed as env to DAG Python code |
 | `DBT_PROFILES_DIR` | `/opt/airflow/dags/dbt/sales_forecasting` | Points dbt to the mounted profiles |
 
 > Source: `airflow/docker-compose.yaml` lines 56–83 and `airflow/.env`.
@@ -153,13 +152,17 @@ docker compose up -d
 cd ../nessie
 docker compose up -d
 
-# Step 3 — Spark + MinIO
+# Step 3 — Spark and MinIO
 cd ../spark_minio
 docker compose up -d
 
-# Step 4 — Airflow (run init first; it migrates the DB and creates the admin user)
+# Step 4 — Trino
+cd ../trino
+docker compose up -d
+
+# Step 5 — Airflow
 cd ../airflow
-docker compose up airflow-init   # wait for exit code 0
+docker compose up airflow-init
 docker compose up -d
 ```
 
@@ -215,10 +218,6 @@ docker exec -it (docker ps -qf "name=airflow-apiserver") \
 │ Spark jobs           │ Nessie (:19120) as SparkCatalog for Iceberg tables     │
 ├──────────────────────┼────────────────────────────────────────────────────────┤
 │ Nessie               │ postgres_container:5432/nessie for version store       │
-├──────────────────────┼────────────────────────────────────────────────────────┤
-│ Airflow              │ postgres_container:5432/sales_forecasting for          │
-│ (AIRFLOW_CONN_       │   downstream data writes by DAG tasks                  │
-│  POSTGRES_DW)        │                                                        │
 ├──────────────────────┼────────────────────────────────────────────────────────┤
 │ Asset/Dataset events │ DS_RAW_PARQUET_READY → producer_ewma_features DAG     │
 │ (datasets.py)        │ DS_EWMA_FEATURES_READY → consumer_lakehouse_pipeline  │

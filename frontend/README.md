@@ -2,18 +2,24 @@
 
 Interactive dashboard for Sales Forecasting visualization and XAI insights.
 
+![Historical Sales Dashboard](../assets/historical_sales_dashboard.jpg)
+
 ## Features
 - **Sales Forecast**: Visualize predicted sales over time.
+
+  ![Sales Prediction Tools](../assets/sales_prediction_tools.jpg)
+
 - **XAI Dashboard**: Explanations for predictions using SHAP plots.
 - **LLM Integration**: Natural language summary of model insights.
 
 ## Prerequisites
 
-Frontend requires **PostgreSQL** for the Historical Sales dashboard.
+Frontend utilizes the Trino query engine to retrieve analytical datasets from the Data Lakehouse.
 
-Start PostgreSQL container before running the app:
+Start the Trino infrastructure before running the application.
+
 ```bash
-cd ../data_platform/infra/postgres
+cd ../data_platform/infra/trino
 docker-compose up -d
 ```
 

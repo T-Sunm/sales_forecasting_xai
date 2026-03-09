@@ -17,6 +17,8 @@ src/ui_xai/
 - **Category Analysis**: Business-level grouping (Sales History, Store/Item Context, Weather, etc.)
 - **SHAP Summary Plot**: Beeswarm visualization showing feature value impacts
 
+![SHAP Value Analysis](../../../../assets/shap_value.jpg)
+
 ### 2. **Dependency Analysis**
 - Interactive dependency plots
 - Explore non-linear relationships between features and predictions
@@ -26,6 +28,8 @@ src/ui_xai/
 - Waterfall plots for individual predictions
 - Top increasing/decreasing factors
 - Prediction vs actual comparison
+
+![XAI VLMs Integration](../../../../assets/xai_vlms.jpg)
 
 ## 📊 Feature Categories
 

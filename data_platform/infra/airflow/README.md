@@ -119,10 +119,8 @@ These variables are **hardcoded** in `docker-compose.yaml` and are not overridab
 | `AIRFLOW__CELERY__RESULT_BACKEND` | `db+postgresql://airflow:airflow@postgres/airflow` | Celery result store. |
 | `AIRFLOW__CELERY__BROKER_URL` | `redis://:@redis:6379/0` | Redis broker (internal). |
 | `AIRFLOW__CORE__EXECUTION_API_SERVER_URL` | `http://airflow-apiserver:8080/execution/` | Worker → API server for task execution. |
-| `S3_ENDPOINT` | `http://minio:9000` | MinIO endpoint reachable inside the compose network; injected into DAG env. |
-| `AIRFLOW_CONN_POSTGRES_DW` | `postgresql://postgres:changeme@postgres_container:5432/sales_forecasting` | Airflow connection to the external sales DW. |
-| `PG_HOST` / `PG_USER` / `PG_PASS` / `PG_DB` | `postgres_container` / `postgres` / `changeme` / `sales_forecasting` | Individual PG vars used in DAG Python code. |
-| `DBT_PROFILES_DIR` | `/opt/airflow/dags/dbt/sales_forecasting` | **NOTE:** This path looks stale — the mounted dbt project is at `/opt/airflow/dags/dbt/sales_forecasting_lakehouse`. **TODO:** Verify if `DBT_PROFILES_DIR` is actively used by Cosmos or if Cosmos uses `profiles_yml_filepath` only. |
+| `S3_ENDPOINT` | `http://minio:9000` | MinIO endpoint reachable inside the compose network |
+| `DBT_PROFILES_DIR` | `/opt/airflow/dags/dbt/sales_forecasting` | The mounted dbt project profiles directory |
 | `AIRFLOW__CORE__LOAD_EXAMPLES` | `true` | Disable in production by changing to `false`. |
 
 ### Volume Mounts (critical for DAG execution)
@@ -141,6 +139,8 @@ These variables are **hardcoded** in `docker-compose.yaml` and are not overridab
 ---
 
 ## Asset-Driven Scheduling Architecture
+
+![Airflow DAGs List](../../../assets/list_dags.jpg)
 
 All pipeline inter-DAG dependencies are expressed via **Airflow Assets** (Airflow 3.x). The central definition file is `dags/datasets.py`.
 
@@ -243,6 +243,8 @@ spark.driver.extraClassPath = /opt/airflow/jars/*
 
 **What it does:** Runs the entire `sales_forecasting_lakehouse` dbt project via Astronomer Cosmos. Tests run after all models complete (`TestBehavior.AFTER_ALL`). On success, emits `DS_LAKEHOUSE_MART_READY` via a downstream `EmptyOperator`.
 
+![dbt Cosmos DAG](../../../assets/airflow-dbt_cosmos-dag.jpg)
+
 **Cosmos config:**
 
 | Parameter | Value |
@@ -341,9 +343,8 @@ docker exec -it (docker ps -qf "name=airflow-apiserver") \
 | Spark driver (inside worker) | `nessie:19120` | Nessie extensions JAR; config via `spark-defaults.conf` |
 | `bootstrap_nessie_namespaces` | `spark-thrift:10001` | PyHive from `dbt_venv`; `CREATE NAMESPACE` statements |
 | Cosmos `DbtTaskGroup` | `spark-thrift:10001` | dbt profile `type=spark, method=thrift`; executable from `dbt_venv` |
-| Airflow scheduler/worker | `redis:6379` | Celery broker (internal to compose) |
-| Airflow all components | `postgres` (internal) | Airflow metadata DB |
-| DAG tasks (`PG_HOST` env) | `postgres_container:5432` | External sales DW for any direct Postgres writes |
+| Airflow scheduler/worker | `redis:6379` | Celery broker internal to compose |
+| Airflow all components | `postgres` internal | Airflow metadata database |
 
 ---
 
@@ -354,7 +355,6 @@ docker exec -it (docker ps -qf "name=airflow-apiserver") \
 | [../README.md](../README.md) | Infra overview, startup order, all services |
 | [../spark_minio/README.md](../spark_minio/README.md) | Spark cluster detail, MinIO, Iceberg config, `spark-defaults.conf` |
 | [../nessie/README.md](../nessie/README.md) | Nessie catalog, namespaces, JDBC backend |
-| [../postgres/README.md](../postgres/README.md) | PostgreSQL setup (sales DW + pgAdmin) |
 | [../../dbt/README.md](../../dbt/README.md) | dbt model layers and profiles consumed by Cosmos |
 | [../../spark/README.md](../../spark/README.md) | PySpark job descriptions submitted by `SparkSubmitOperator` |
 | [../../../README.md](../../../README.md) | Root project overview and quickstart |
