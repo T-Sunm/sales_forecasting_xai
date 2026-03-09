@@ -13,7 +13,7 @@ Interactive dashboard for Sales Forecasting visualization and XAI insights.
 
   ![SHAP Value Analysis](../assets/shap_value.jpg)
 
-- **LLM Integration**: Natural language summary of model insights.
+- **VLM Integration**: Natural language summary of model insights.
 
   ![XAI VLMs Integration](../assets/xai_vlms.jpg)
 
