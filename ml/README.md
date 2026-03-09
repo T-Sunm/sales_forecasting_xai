@@ -6,7 +6,7 @@
 
 ## Overview
 
-The `ml/` module is standardising the model building lifecycle. It defines a formal **MLproject** component. The flow covers extracting analytical marts from PostgreSQL, splitting data based on time cutoffs, discovering optimal hyperparameters via Bayesian optimization (Optuna), and producing a finalized LightGBM model artifact (`.pkl`).
+The `ml/` module standardises the model building lifecycle using an **MLproject** definition. The flow covers extracting processed features from the **Data Lakehouse (Iceberg Gold Layer)** via **Trino**, splitting data based on time cutoffs, discovering optimal hyperparameters via Bayesian optimization (Optuna), and producing a finalized LightGBM model artifact (`.pkl`).
 
 All experiments, parameters, and metrics are meticulously tracked using MLflow, with nested runs for Optuna trials to keep the experiment UI clean and traceable.
 
@@ -21,7 +21,7 @@ ml/
 ├── processing/
 │   └── validator.py            ← Feature column definitions and target mapping
 ├── scripts/
-│   ├── prepare_data.py         ← DB extraction and Train/Valid/Test splitting
+│   ├── prepare_data.py         ← Trino extraction and Train/Valid/Test splitting
 │   ├── train.py                ← Final model training script
 │   └── tune.py                 ← Optuna hyperparameter study script
 ├── tuning/
@@ -34,15 +34,15 @@ ml/
 
 ## Responsibilities
 
-1. **`prepare_data`**: Connects to the data warehouse (`marts.sales_forecast` JOIN `marts.dim_date`), applies Kaggle test ID masking, handles numeric coercion, and splits the data temporally based on `prepare.cutoff_date` from `params.yaml`.
+1. **`prepare_data`**: Connects to the **Trino** gateway, joins Gold Layer tables (`fact_sales_item_daily`, `fact_store_weather_daily`, `dim_date`) in the `iceberg.analytics` schema. It fetches **74+ features** (including detailed weather flags and rolling sales metrics), applies Kaggle test ID masking, and splits data temporally.
 2. **`tune`**: Reads Parquet files, establishes an `optuna.create_study`, and iteratively suggests parameters across a defined search space (`tuning/objective.py`). Each trial is logged as a *nested* child run under a parent MLflow study. Outputs JSON payload containing the `best_params`.
-3. **`train`**: Merges default static hyperparams (from `params.yaml`) with tuned `best_params.json` to fit a final LightGBM Regressor. Automatically logs metrics (`val_rmsle`, `val_mae`) using `mlflow.lightgbm.autolog()` and saves a `.pkl` to `shared/models/`.
+3. **`train`**: Merges default static hyperparams (from `params.yaml`) with tuned `best_params.json` to fit a final LightGBM Regressor. Automatically logs metrics (`val_rmsle`, `val_mae`) and model artifacts to the MLflow Model Registry under the `@champion` alias.
 
 ---
 
 ## Configuration
 
-This module relies on environment variables (usually loaded from the root `.env` via `utils/mlflow_utils.py` and `scripts/prepare_data.py`).
+This module relies on environment variables loaded from the root `.env`.
 
 ### MLflow Tracking & Artifacts
 | Variable | Usage | Default Fallback |
@@ -52,15 +52,14 @@ This module relies on environment variables (usually loaded from the root `.env`
 | `AWS_ACCESS_KEY_ID` | MinIO access key for artifact upload | `minioadmin` |
 | `AWS_SECRET_ACCESS_KEY` | MinIO secret key for artifact upload | `minioadmin` |
 
-### Database Extraction (`prepare_data.py`)
+### Lakehouse Connection (Trino)
 | Variable | Usage | Default |
 |---|---|---|
-| `POSTGRES_USER` | DB User | `postgres` |
-| `POSTGRES_PASSWORD` | DB Password | `changeme` |
-| `POSTGRES_HOST` | DB Host | `localhost` |
-| `POSTGRES_PORT` | DB Port | `5432` |
-
-> *Database used:* Fixed to `sales_forecasting`.
+| `TRINO_USER` | Trino User | `admin` |
+| `TRINO_HOST` | Trino Host | `localhost` |
+| `TRINO_PORT` | Trino Port | `8085` |
+| `TRINO_CATALOG` | Iceberg Catalog | `iceberg` |
+| `TRINO_SCHEMA` | Analytics Schema | `analytics` |
 
 ---
 
@@ -75,7 +74,7 @@ uv sync
 
 ### Option A: Via DVC (Recommended)
 
-Because data dependencies, input parameters, and output artifacts are closely tied together, DVC is the intended orchestrator.
+DVC orchestrates high-level stages. Note that `prepare_data` now requires the Lakehouse services (MinIO, Nessie, Trino) to be running.
 
 ```fish
 cd ../shared
@@ -84,19 +83,19 @@ dvc repro
 
 ### Option B: Via MLflow CLI
 
-You can run individual components defined in `MLproject`:
+You can run individual components defined in `MLproject`. **Note:** You MUST specify `--experiment-name` at the CLI to avoid experiment ID mismatch errors within the scripts.
 
 ```fish
 cd ml
 
-# 1. Prepare data
-uv run mlflow run . -e prepare_data --env-manager local
+# 1. Prepare data (Fetches from Lakehouse)
+$env:MLFLOW_TRACKING_URI="http://127.0.0.1:5000"; uv run mlflow run . -e prepare_data --env-manager local
 
 # 2. Run hyperparameter tuning
-uv run mlflow run . -e tune --env-manager local
+$env:MLFLOW_TRACKING_URI="http://127.0.0.1:5000"; uv run mlflow run . -e tune --experiment-name "walmart-sales-tuning" --env-manager local
 
-# 3. Train final baseline
-uv run mlflow run . -e train --env-manager local
+# 3. Train final baseline & Register model
+$env:MLFLOW_TRACKING_URI="http://127.0.0.1:5000"; uv run mlflow run . -e train --experiment-name "walmart-sales-baseline" --env-manager local
 ```
 
 ---
@@ -105,12 +104,12 @@ uv run mlflow run . -e train --env-manager local
 
 | Integration | Direction | Description |
 |---|---|---|
-| **PostgreSQL** | ← Reads | `prepare_data.py` pulls historical joins directly from the DBMS via `sqlalchemy`. |
-| **`shared/params.yaml`** | ← Reads | Reads `cutoff_date` for splitting and base fallback parameters for `train.py`. |
-| **`shared/data_raw/`** | ← Reads | Pulls the Kaggle `test.csv` to flag unseen store/item rows properly. |
+| **Data Lakehouse (Trino)** | ← Reads | `prepare_data.py` pulls Gold Layer features from Iceberg tables. |
+| **`shared/params.yaml`** | ← Reads | Reads `cutoff_date` for splitting and base fallback parameters. |
+| **`shared/data_raw/`** | ← Reads | Pulls the Kaggle `test.csv` to flag unseen base rows. |
 | **`shared/data/processed/`** | → Writes | Drops `.parquet` files for training and validation splits. |
 | **`shared/models/`** | → Writes | Serialises `lgbm_baseline.pkl` here. |
-| **MLflow Server** | → Writes | Logs tags, parent/child hierarchical runs (Optuna trials), and metric dictionaries (`val_rmsle`). |
+| **MLflow Server** | → Writes | Logs experiments and registers the `@champion` model. |
 
 ---
 
@@ -118,7 +117,7 @@ uv run mlflow run . -e train --env-manager local
 
 | Link | Coverage |
 |---|---|
-| [../shared/README.md](../shared/README.md) | DVC pipeline locking, param definitions, and DVC artifact storage behavior. |
-| [../data_platform/dbt/README.md](../data_platform/dbt/README.md) | How the mart tables queried by `prepare_data.py` are structurally formulated. |
-| [../backend/README.md](../backend/README.md) | How the API loads the finalized model (`.pkl`) for serving predictions. |
+| [../shared/README.md](../shared/README.md) | DVC pipeline locking and artifact storage behavior. |
+| [../data_platform/dbt/README.md](../data_platform/dbt/README.md) | How the Gold Layer tables are formulated in Iceberg. |
+| [../backend/README.md](../backend/README.md) | How the API loads the `@champion` model for serving. |
 | [../README.md](../README.md) | Root project overview and architecture. |

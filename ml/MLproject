@@ -1,4 +1,4 @@
-name: sales_forecasting_ml
+﻿name: sales_forecasting_ml
 
 # This project uses uv for environment management.
 # To run locally using the existing uv environment:
@@ -29,3 +29,6 @@ entry_points:
       out_best_params: {type: string, default: "../shared/outputs/tuning/best_params.json"}
     command: "python -m scripts.tune --experiment-name {experiment_name} --study-name {study_name} --n-trials {n_trials} --timeout-sec {timeout_sec} --train-path {train_path} --valid-path {valid_path} --out-best-params {out_best_params}"
 
+
+  test_env:
+    command: "python -m scripts.test_env"
