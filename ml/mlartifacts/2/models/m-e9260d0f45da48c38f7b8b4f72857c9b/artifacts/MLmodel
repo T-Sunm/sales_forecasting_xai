@@ -1,0 +1,29 @@
+artifact_path: mlflow-artifacts:/2/models/m-e9260d0f45da48c38f7b8b4f72857c9b/artifacts
+flavors:
+  lightgbm:
+    code: null
+    data: model.pkl
+    lgb_version: 4.6.0
+    model_class: lightgbm.sklearn.LGBMRegressor
+    serialization_format: cloudpickle
+    skops_trusted_types: null
+  python_function:
+    data: model.pkl
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.lightgbm
+    python_version: 3.10.19
+is_signature_from_type_hint: false
+mlflow_version: 3.9.0
+model_id: m-e9260d0f45da48c38f7b8b4f72857c9b
+model_size_bytes: 9411
+model_uuid: m-e9260d0f45da48c38f7b8b4f72857c9b
+prompts: null
+run_id: 1fbbd1eb12194881af0b5a7228c2bdb5
+signature:
+  inputs: '[{"type": "tensor", "tensor-spec": {"dtype": "float64", "shape": [-1, 5]}}]'
+  outputs: '[{"type": "tensor", "tensor-spec": {"dtype": "float64", "shape": [-1]}}]'
+  params: null
+type_hint_from_example: false
+utc_time_created: '2026-03-07 18:55:36.002957'

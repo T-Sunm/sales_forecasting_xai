@@ -11,7 +11,7 @@ from starlette.responses import Response
 from starlette.concurrency import iterate_in_threadpool
 from pydantic import BaseModel
 
-from config import LOGS_DIR
+from src.config import LOGS_DIR
 
 # --- 1. Security Logic (Recursive Masking) ---
 SENSITIVE_PATTERN = re.compile(r'(password|passwd|pwd|secret|token|api_key|apikey|email|e-mail)', re.IGNORECASE)

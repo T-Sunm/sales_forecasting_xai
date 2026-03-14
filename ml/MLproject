@@ -1,0 +1,34 @@
+﻿name: sales_forecasting_ml
+
+# This project uses uv for environment management.
+# To run locally using the existing uv environment:
+# mlflow run ./ml -e train --env-manager local
+
+entry_points:
+  prepare_data:
+    command: "python -m scripts.prepare_data"
+  
+  train:
+    parameters:
+      experiment_name: {type: string, default: "walmart-sales-baseline"}
+      train_path: {type: path, default: "../shared/data/processed/train.parquet"}
+      valid_path: {type: path, default: "../shared/data/processed/valid.parquet"}
+      run_name: {type: string, default: "lgbm_baseline_global"}
+      model_out: {type: path, default: "../shared/models/lgbm_baseline.pkl"}
+      metrics_out: {type: path, default: "../shared/outputs/metrics.json"}
+    command: "python -m scripts.train --experiment-name {experiment_name} --train-path {train_path} --valid-path {valid_path} --run-name {run_name} --model-out {model_out} --metrics-out {metrics_out}"
+
+  tune:
+    parameters:
+      experiment_name: {type: string, default: "walmart-sales-tuning"}
+      study_name: {type: string, default: "lgbm_global_optuna"}
+      n_trials: {type: int, default: 10}
+      timeout_sec: {type: int, default: 0}
+      train_path: {type: path, default: "../shared/data/processed/train.parquet"}
+      valid_path: {type: path, default: "../shared/data/processed/valid.parquet"}
+      out_best_params: {type: string, default: "../shared/outputs/tuning/best_params.json"}
+    command: "python -m scripts.tune --experiment-name {experiment_name} --study-name {study_name} --n-trials {n_trials} --timeout-sec {timeout_sec} --train-path {train_path} --valid-path {valid_path} --out-best-params {out_best_params}"
+
+
+  test_env:
+    command: "python -m scripts.test_env"

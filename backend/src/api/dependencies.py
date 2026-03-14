@@ -1,23 +1,9 @@
 from fastapi import Request, HTTPException, status
 import pandas as pd
-from core.model import ModelManager
+from src.core.model import ModelManager
 
 async def get_model_manager(request: Request) -> ModelManager:
-    """
-    Dependency to retrieve the initialized ModelManager from app state.
-    Ensures safe access and handles cases where models aren't loaded.
-    
-    Usage in router:
-        @router.post("/predict")
-        async def predict(
-            input_data: PredictionInput,
-            manager: ModelManager = Depends(get_model_manager)
-        ):
-            ...
-    
-    Raises:
-        HTTPException(503): If ModelManager is not initialized or models aren't loaded.
-    """
+    """Retrieve ModelManager from app state. Raises 503 if not available."""
     model_manager = getattr(request.app.state, "model_manager", None)
     
     if model_manager is None:
@@ -26,20 +12,17 @@ async def get_model_manager(request: Request) -> ModelManager:
             detail="Model Manager is not initializing. Please wait a moment."
         )
 
-    if model_manager.models_dict is None:
+    if model_manager.model is None:
          raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Predictive models are not loaded. Cannot process request."
+            detail="Predictive model is not loaded. Cannot process request."
         )
         
     return model_manager
 
 
 async def get_feature_data(request: Request) -> pd.DataFrame:
-    """
-    Dependency to retrieve the loaded feature engineering data.
-    Required for prediction context (historical features, weather, etc.)
-    """
+    """Retrieve feature data from app state. Raises 503 if not available."""
     feature_data = getattr(request.app.state, "feature_data", None)
     
     if feature_data is None:

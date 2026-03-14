@@ -146,8 +146,10 @@ def recursive_forecast(
     # Initialize forecast history
     forecast_history = []
     
-    # Get model features
-    if hasattr(model, "feature_name_"):
+    # Get model features from MLflow signature (generic, works with any flavor)
+    if hasattr(model, "metadata") and model.metadata.signature:
+        model_features = [inp.name for inp in model.metadata.signature.inputs]
+    elif hasattr(model, "feature_name_"):
         model_features = model.feature_name_
     else:
         model_features = [col for col in historical_data.columns 

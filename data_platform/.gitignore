@@ -1,0 +1,34 @@
+# MinIO local data storage
+infra/spark_minio/minio_data/
+infra/spark_minio/data/
+
+# DBT logs (top-level, outside of dbt projects)
+dbt/logs/
+dbt/*.log
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Environment files
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.bak

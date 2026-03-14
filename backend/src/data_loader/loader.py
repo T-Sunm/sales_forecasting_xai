@@ -7,8 +7,9 @@ import streamlit as st
 from src.config import (
     LGBM_MODELS_PKL,
     FEATURE_STATS_JSON,
-    WEATHER_KEY_STORE_CSV,
-    FEATURE_ENGINEERED_FEATHER,
+    TRAIN_DATA_PATH,
+    COL_STORE_ID,
+    COL_ITEM_ID
 )
 
 
@@ -42,43 +43,31 @@ def load_feature_stats():
 
 @st.cache_data
 def load_data():
-    """Load preprocessed sales data"""
+    """Load preprocessed sales data from train.parquet"""
     try:
-        # Load the preprocessed data
-        df = pd.read_csv(WEATHER_KEY_STORE_CSV)
-
-        # Filter out kaggle test data
+        df = pd.read_parquet(TRAIN_DATA_PATH)
+        
+        # Filter out kaggle test data if applicable
         if "is_kaggle_test" in df.columns:
-            df = df[df["is_kaggle_test"] == False]
+            df = df[df["is_kaggle_test"] == 0]
 
-        # Convert date column to datetime
         if "date" in df.columns:
             df["date"] = pd.to_datetime(df["date"])
 
         return df
     except FileNotFoundError:
-        st.error(
-            f"Data file not found. Please ensure '{WEATHER_KEY_STORE_CSV}' exists."
-        )
-        # Return empty DataFrame with expected columns as fallback
-        return pd.DataFrame(columns=["date", "store", "sales"])
+        st.error(f"Data file not found: {TRAIN_DATA_PATH}")
+        return pd.DataFrame(columns=["date", "store_id", "item_id", "units"])
 
 
 @st.cache_data
 def load_feature_engineered_data():
-    """Load feature engineered data with extended features for predictions"""
+    """Load feature engineered data (train.parquet)"""
     try:
-        import pyarrow.feather as feather
-
-        feature_engineered_data = feather.read_feather(
-            FEATURE_ENGINEERED_FEATHER
-        )
-        return feature_engineered_data
+        return pd.read_parquet(TRAIN_DATA_PATH)
     except Exception as e:
         st.error(f"Error loading feature engineered data: {str(e)}")
-        st.info(
-            f"Please ensure the file '{FEATURE_ENGINEERED_FEATHER}' exists."
-        )
+        st.info(f"Please ensure the file '{TRAIN_DATA_PATH}' exists.")
         return pd.DataFrame()
 
 
@@ -109,12 +98,12 @@ def preprocess_data(df, feature_stats=None):
 
 
 def get_top_data_pair(df):
-    """Find the (store_nbr, item_nbr) pair with the most records"""
-    if df.empty or "store_nbr" not in df.columns or "item_nbr" not in df.columns:
+    """Find the (store_id, item_id) pair with the most records"""
+    if df.empty or COL_STORE_ID not in df.columns or COL_ITEM_ID not in df.columns:
         return None, None
         
     counts = (
-        df.groupby(["store_nbr", "item_nbr"])
+        df.groupby([COL_STORE_ID, COL_ITEM_ID])
         .size()
         .reset_index(name="n_rows")
         .sort_values("n_rows", ascending=False)
@@ -124,4 +113,4 @@ def get_top_data_pair(df):
         return None, None
         
     top_row = counts.iloc[0]
-    return int(top_row["store_nbr"]), int(top_row["item_nbr"])
+    return int(top_row[COL_STORE_ID]), int(top_row[COL_ITEM_ID])

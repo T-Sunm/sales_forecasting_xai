@@ -86,3 +86,5 @@ uv.lock
 .venv/
 backend/.venv/
 frontend/.venv/
+.agent/
+shared/notebooks/survey_data.csv

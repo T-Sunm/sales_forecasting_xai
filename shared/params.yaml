@@ -1,0 +1,27 @@
+# DVC Pipeline Parameters
+# Thay đổi các giá trị ở đây sẽ trigger DVC rerun stage tương ứng
+
+prepare:
+  cutoff_date: "2014-08-01"
+
+train:
+  objective: regression
+  metric: rmse
+  boosting_type: gbdt
+  num_leaves: 127
+  learning_rate: 0.0125
+  feature_fraction: 0.804
+  bagging_fraction: 0.903
+  bagging_freq: 7
+  min_child_samples: 42
+  lambda_l1: 7.33e-08
+  lambda_l2: 0.00357
+  max_depth: 11
+  n_estimators: 1000
+  early_stopping_rounds: 50
+  random_state: 2025
+
+tune:
+  n_trials: 50
+  timeout_sec: 0
+  study_name: lgbm_global_optuna

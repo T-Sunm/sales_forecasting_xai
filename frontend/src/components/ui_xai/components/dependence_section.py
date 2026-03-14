@@ -14,8 +14,8 @@ def display_dependence_analysis(
     X_sample,
     importance_df,
     llm_generator=None,
-    store_nbr=None,
-    item_nbr=None,
+    store_id=None,
+    item_id=None,
     api_client=None
 ):
     """
@@ -26,8 +26,8 @@ def display_dependence_analysis(
         X_sample: Feature data DataFrame
         importance_df: Feature importance DataFrame
         llm_generator: SalesInsightGenerator instance
-        store_nbr: Store ID for context
-        item_nbr: Item ID for context
+        store_id: Store ID for context
+        item_id: Item ID for context
         api_client: APIClient instance (optional, for fetching data)
     """
     st.header("🔗 Feature Dependence Analysis")
@@ -39,9 +39,15 @@ def display_dependence_analysis(
     top_features = importance_df.head(10)['feature'].tolist()
     
     # Feature selector
+    default_feature = "logunits_lag_1"
+    default_idx = 0
+    if default_feature in top_features:
+        default_idx = top_features.index(default_feature)
+
     selected_feature = st.selectbox(
         "Select a feature to analyze:",
         top_features,
+        index=default_idx,
         help="Choose from top 10 most important features"
     )
     
@@ -55,7 +61,7 @@ def display_dependence_analysis(
     if api_client:
         # Fetch data from API
         with st.spinner(f"Fetching dependence data for {selected_feature}..."):
-            dep_data = api_client.get_dependence(store_nbr, item_nbr, selected_feature)
+            dep_data = api_client.get_dependence(store_id, item_id, selected_feature)
         
         if dep_data:
             with col1:
@@ -119,8 +125,8 @@ def display_dependence_analysis(
             feature_name=selected_feature,
             feature_stats=pd.Series(feature_stats), # LLM expects Series
             category=category,
-            store_nbr=store_nbr,
-            item_nbr=item_nbr
+            store_id=store_id,
+            item_id=item_id
         )
     elif llm_generator is None:
         col1, col2, col3 = st.columns([1, 1.5, 1])

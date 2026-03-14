@@ -1,192 +1,194 @@
-# Data Platform (dbt + PostgreSQL)
+# Data Platform (Lakehouse Architecture)
 
-This project manages the data transformation pipeline using **dbt** (data build tool) and **PostgreSQL**.
+This project implements a modern data platform using Spark and MinIO for the Data Lake.
 
-## 📋 Prerequisites
-
-- Python (3.10+)
-- [uv](https://docs.astral.sh/uv/) (Python package manager)
-- PostgreSQL (Running locally on port 5432)
-
-## 🚀 Setup Guide
-
-### 1. Configure dbt Profile
-
-Create or update your global dbt profile to connect to your local PostgreSQL instance.
-
-**Edit Profile:**
-
-```powershell
-# Windows
-notepad $env:USERPROFILE\.dbt\profiles.yml
-
-# Linux/macOS
-nano ~/.dbt/profiles.yml
-```
-
-**Configuration:**
-
-```yaml
-sales_forecasting:
-  target: dev
-  outputs:
-    dev:
-      type: postgres
-      host: localhost
-      user: postgres
-      password: changeme  # Update with your local password
-      port: 5432
-      dbname: postgres
-      schema: public
-      threads: 4
-```
-
-### 2. Install Dependencies
-
-Navigate to the `data_platform` directory and sync dependencies using `uv`.
-
-```powershell
-cd data_platform
-uv sync
-```
-
-### 3. Load Raw Data (ETL)
-
-We use a Python script to load raw CSV data into the PostgreSQL `raw` schema.
-
-- **Source Data:** `shared/data/data_raw/*.csv`
-- **Destination:** PostgreSQL `raw` schema (`raw_sales`, `raw_weather`, `raw_key`)
-
-Run the loader script:
-
-```powershell
-uv run python postgres/scripts/load_raw_data.py
-```
-
-**Expected Output:**
+## Architecture Overview
 
 ```
-✅ Schema 'raw' created/verified
-✅ Loaded train.csv -> raw.raw_sales
-✅ Loaded weather.csv -> raw.raw_weather
-✅ Loaded key.csv -> raw.raw_key
-🎉 All data loaded successfully!
+Raw CSV → MinIO Bronze → Spark Staging → MinIO Silver → Spark Intermediate → MinIO Gold → dbt Iceberg
 ```
 
-### 4. Verify Connection
+### Components
 
-Check if dbt can connect to your PostgreSQL database.
-
-```powershell
-cd dbt/sales_forecasting
-uv run dbt debug
-```
-
-Look for: `All checks passed!`
-
-## 🛠️ Development Workflow
-
-### Running Models
-
-Transform raw data into analytics-ready models:
-
-```powershell
-# Run all models
-uv run dbt run
-
-# Run specific models (e.g., only staging)
-uv run dbt run --select tag:staging
-```
-
-### 5. Generate Base Models (Optional)
-
-Instead of writing YAML files manually, use `codegen` to automatically generate the initial `sources.yml` from your database schema.
-
-**1. Install dbt packages:**
-Ensure `packages.yml` exists and includes `dbt-labs/codegen`, then run:
-
-```powershell
-```powershell
-uv run dbt deps
-```
-
-**2. Create Model Directories:**
-Make sure the folder structure exists:
-
-```powershell
-# PowerShell
-# Note: In PowerShell, you can create multiple directories like this:
-mkdir models/staging, models/intermediate, models/marts
-```
-
-**3. Generate Source YAML:**
-Run this command to inspect the raw schema and output the YAML configuration:
-
-```powershell
-# Print YAML to terminal (Copy & Paste the output to models/staging/sources.yml)
-uv run dbt run-operation generate_source --args '{"schema_name": "raw", "database_name": "postgres"}'
-```
-
-**Result (`models/staging/sources.yml`):**
-
-```yaml
-version: 2
-
-sources:
-  - name: raw
-    database: postgres
-    schema: raw
-    tables:
-      - name: raw_key
-      - name: raw_sales
-      - name: raw_weather
-```
-
-### 6. Configure Project Structure (Recommended)
-
-Clean up the default dbt examples and configure the materialization strategies for your data layers.
-
-**1. Remove Example Models:**
-Delete the default `example` folder to keep the project clean.
-
-```powershell
-Remove-Item -Recurse -Force models/example
-```
-
-**2. Configure Materialization:**
-Update `dbt_project.yml` to define how models in each layer should be built (View vs Table).
-
-```yaml
-models:
-  sales_forecasting:
-    # staging & intermediate -> Views (Faster, less storage)
-    staging:
-      +materialized: view
-    intermediate:
-      +materialized: view
-      
-    # marts -> Tables (Pre-computed for performance)
-    marts:
-      +materialized: table
-```
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| **Data Lake** | MinIO | Object storage for Bronze, Silver, and Gold layers |
+| **Processing** | Spark | Distributed data transformation engine |
+| **Orchestration** | Airflow | Workflow scheduling and dependency management |
+| **Metadata** | PostgreSQL | Metadata store for Nessie and Airflow |
 
 ## 📂 Project Structure
 
 ```text
 data_platform/
-├── dbt/
-│   └── sales_forecasting/    # Main dbt project
-│       ├── models/           # SQL transformations
-│       ├── seeds/            # Static reference data
-│       └── dbt_project.yml   # Project configuration
-├── postgres/
-│   └── scripts/
-│       └── load_raw_data.py  # Script to load CSVs to Postgres
-└── pyproject.toml            # Python dependencies (dbt-core, psycopg2, etc.)
+├── infra/                              # Infrastructure
+│   ├── trino/
+│   │   └── docker-compose.yml          # Trino for analytical serving
+│   ├── postgres/
+│   │   └── docker-compose.yml          # Metadata store
+│   └── spark_minio/
+│       ├── docker-compose.yml
+│       ├── Dockerfile
+│       └── scripts/
+│           ├── load_raw_data.py        # Raw CSV → Bronze
+│           └── load_holidays.py        # Holidays → Bronze
+│
+├── datalake/                           # Data Lake metadata
+│   ├── schemas/                        # Schema definitions
+│   └── docs/                           # Data dictionary
+│
+├── spark/                              # Spark ETL jobs
+│   ├── src/                            # Reusable libraries
+│   ├── jobs/
+│   │   ├── staging/                    # Bronze → Silver
+│   │   └── intermediate/               # Silver → Gold
+│   └── configs/                        # Environment configs
+│
+├── pipelines/                          # Orchestration
+│   └── airflow/
+│       └── dags/
+│
+│   └── sales_forecasting_lakehouse/    # Lakehouse models using Spark
+│       ├── models/
+│       │   ├── marts/                  # Analytics ready Iceberg tables
+│       │   └── staging/                # Initial cleaning models
+│       ├── seeds/
+│       ├── tests/
+│       └── macros/
+│
+├── .python-version
+├── pyproject.toml
+├── README.md
+└── uv.lock
 ```
 
-## 📚 Resources
+## 🚀 Quick Start
+
+### 1. Setup Shared Network
+
+The infrastructure components communicate via a shared Docker network named `data_platform_net`. You must create this network once before starting the stack:
+
+```powershell
+docker network create data_platform_net
+```
+
+### 2. Start Infrastructure
+
+With the shared network created, you can now start the components in any order.
+
+```powershell
+# 1. Start Spark and MinIO
+cd infra/spark_minio
+docker-compose up -d
+
+# 2. Start PostgreSQL (Metadata Store)
+cd infra/postgres
+docker-compose up -d
+
+# 3. Start Trino (Serving Engine)
+cd infra/trino
+docker-compose up -d
+
+# 4. Start Airflow (Orchestrator)
+cd infra/airflow
+docker-compose up -d
+```
+
+### 3. Load Raw Data to MinIO
+
+```powershell
+# Load raw CSV files to Bronze layer
+uv run python infra/spark_minio/scripts/load_raw_data.py
+
+# Load holidays data
+uv run python infra/spark_minio/scripts/load_holidays.py
+```
+
+### 3. Run Spark Jobs
+
+```powershell
+# Staging transformation from Bronze to Silver
+spark-submit spark/jobs/staging/sales_staging.py
+
+# Intermediate transformation from Silver to Gold
+spark-submit spark/jobs/intermediate/sales_features.py
+```
+
+### 4. Run dbt (Manual)
+
+```powershell
+cd dbt/sales_forecasting_lakehouse
+uv run dbt run
+```
+
+## 📊 Data Layers
+
+### Bronze Layer (Raw)
+- **Storage**: MinIO `bronze/` bucket
+- **Format**: Parquet
+- **Content**: Raw data from CSV files, no transformations
+- **Source**: `infra/spark_minio/scripts/load_raw_data.py`
+
+### Silver Layer (Staged)
+- **Storage**: MinIO `silver/` bucket
+- **Format**: Parquet
+- **Content**: Cleaned and staged data
+- **Transformations**: 
+  - Column renaming
+  - Type casting
+  - Basic data cleaning
+  - Missing value handling
+- **Source**: `spark/jobs/staging/`
+
+### Gold Layer (Features)
+- **Storage**: MinIO `gold/` bucket
+- **Format**: Parquet
+- **Content**: Feature-engineered data ready for ML/Analytics
+- **Transformations**:
+  - Lag features
+  - Rolling window aggregations
+  - EWMA calculations
+  - Store/Item context features
+  - Date features
+  - Weather integration
+- **Source**: `spark/jobs/intermediate/`
+
+### Marts Layer Iceberg Tables
+- **Storage** MinIO
+- **Format** Apache Iceberg
+- **Content** Analytical datasets ready for Machine Learning and BI
+- **Engine** dbt and Apache Spark
+- **Source** `dbt/sales_forecasting_lakehouse/models/marts/`
+
+## Platform Architecture
+
+### Spark Processing Cluster
+
+![Spark Cluster Dashboard](../assets/spark-cluster-dashboard.jpg)
+
+The Airflow driver node and Spark executor nodes are aligned to use Python 3.12. The Spark configuration explicitly targets the correct Python executable paths for both environments. Because Python 3.12 removes the distutils module, the container build definitions upgrade setuptools and wheel to provide a necessary compatibility layer.
+
+### Airflow Asset Orchestration
+
+![Airflow DAGs List](../assets/list_dags.jpg)
+
+The orchestration framework relies on the Airflow SDK Asset class rather than legacy Dataset objects. The triggering asset events lookup relies on iterative URI string matching to prevent dictionary hashing errors when analyzing asset metadata. The workflow applies Asset objects as dictionary keys to correctly distribute metadata across downstream consuming operations.
+
+Astronomer Cosmos parses dbt project definitions directly into Airflow execution groups. This design allows dependency management entirely inside the Data Lakehouse environment.
+
+![dbt Cosmos DAG](../assets/airflow-dbt_cosmos-dag.jpg)
+
+### Nessie Catalog
+
+The storage strategy implements data repository branching and active version control capabilities using Apache Nessie. 
+
+![Nessie Catalog Namespaces](../assets/nessie-catalog-namespaces.jpg)
+
+The architecture routes Airflow task states and Nessie catalog versioning logs into a unified internal PostgreSQL instance.
+
+##  Resources
 
 - [dbt Documentation](https://docs.getdbt.com/)
-- [dbt Discourse](https://discourse.getdbt.com/)
-- [dbt Slack](https://community.getdbt.com/)
+- [Apache Spark Documentation](https://spark.apache.org/docs/latest/)
+- [MinIO Documentation](https://min.io/docs/)
+- [Airflow Documentation](https://airflow.apache.org/docs/)

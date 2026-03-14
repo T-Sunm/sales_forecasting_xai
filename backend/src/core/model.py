@@ -3,14 +3,21 @@ Core Model Module - Business Logic Layer
 Separates prediction logic from UI layer for better testability and reusability.
 """
 
-import pickle
+import mlflow
+import mlflow.pyfunc
 from datetime import datetime, date
 from typing import Dict, Any, Optional, Tuple, List
 import numpy as np
 import pandas as pd
 from pydantic import BaseModel, Field, validator
 
-from config import LGBM_MODELS_PKL
+from src.config import (
+    MLFLOW_TRACKING_URI,
+    MLFLOW_REGISTERED_MODEL_NAME,
+    MLFLOW_MODEL_ALIAS,
+    COL_STORE_ID,
+    COL_ITEM_ID,
+)
 
 
 # ==================== PYDANTIC MODELS ====================
@@ -96,48 +103,52 @@ class PredictionOutput(BaseModel):
 
 class ModelManager:
     """
-    Manages LightGBM models and prediction logic.
-    Separates business logic from UI layer.
+    Manages LightGBM model and prediction logic.
+    Uses a single global model with store_id/item_id as categorical features.
     """
     
     def __init__(self):
-        self.models_dict: Optional[Dict[Tuple[int, int], Any]] = None
-        
+        self.model: Optional[Any] = None
+        self._model_impl = None
+
     def load_models(self) -> bool:
         """
-        Load trained models from pickle file.
-        
+        Load trained model from MLflow Model Registry via @champion alias.
+
         Returns:
             bool: True if successful, False otherwise
         """
         try:
-            with open(LGBM_MODELS_PKL, "rb") as file:
-                self.models_dict = pickle.load(file)
+            mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+            model_uri = f"models:/{MLFLOW_REGISTERED_MODEL_NAME}@{MLFLOW_MODEL_ALIAS}"
+            self.model = mlflow.pyfunc.load_model(model_uri)
+            # Extract raw LightGBM booster for SHAP compatibility
+            self._model_impl = self.model._model_impl.lgb_model
             return True
-        except FileNotFoundError:
-            return False
-        except Exception as e:
-            # Log error here if logger is available
+        except Exception:
             return False
     
-    def get_model(self, store_id: int, item_id: int):
+    def get_feature_names(self) -> list:
+        """Get feature names from the underlying LightGBM model."""
+        return self._model_impl.feature_name_
+
+    def get_raw_model(self):
         """
-        Retrieve specific model for store-item pair.
-        
-        Args:
-            store_id: Store identifier
-            item_id: Item identifier
-            
-        Returns:
-            LightGBM model or None if not found
+        Extract the underlying LightGBM booster from MLflow PyFunc wrapper.
+        Required for SHAP TreeExplainer which cannot work with PyFunc wrappers.
         """
-        if self.models_dict is None:
-            return None
-        return self.models_dict.get((store_id, item_id))
+        return self._model_impl
     
+    def get_model(self, store_id: int = None, item_id: int = None):
+        """
+        Retrieve the global model.
+        store_id and item_id params kept for API compatibility.
+        """
+        return self.model
+
     def prepare_input(
-        self, 
-        recent_samples: pd.DataFrame, 
+        self,
+        recent_samples: pd.DataFrame,
         prediction_input: PredictionInput
     ) -> pd.Series:
         """
@@ -203,8 +214,8 @@ class ModelManager:
         item_id: int,
         prediction_input: PredictionInput,
         feature_engineered_data: pd.DataFrame,
-        store_col: str = "store_nbr",
-        item_col: str = "item_nbr",
+        store_col: str = COL_STORE_ID,
+        item_col: str = COL_ITEM_ID,
         use_recursive: bool = True
     ) -> PredictionOutput:
         """
@@ -283,8 +294,8 @@ class ModelManager:
             # Create DataFrame for prediction
             input_df = pd.DataFrame([input_row])
             
-            # Select only features used by the model
-            model_features = model.feature_name_
+            # Select only features from model signature (generic MLflow API)
+            model_features = self.get_feature_names()
             X_pred = input_df[model_features]
             
             # Make prediction (model outputs log-transformed values)

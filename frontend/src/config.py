@@ -10,18 +10,20 @@ TEMP_DIR = BASE_DIR / "frontend" / "temp"
 FIGURES_DIR = SHARED_DIR.parent / "figures"
 
 DATA_DIR = SHARED_DIR / "data"
-DATA_PROCESSED_DIR = DATA_DIR / "data_processed"
-WEATHER_KEY_STORE_CSV = DATA_PROCESSED_DIR / "weather_key_store_merged.csv"
-FEATURE_ENGINEERED_FEATHER = DATA_PROCESSED_DIR / "feature_engineered_data_88_features.feather"
+DATA_PROCESSED_DIR = DATA_DIR / "processed"
 
-MODELS_DIR = SHARED_DIR / "models"
-LGBM_MODELS_PKL = MODELS_DIR / "lgbm_models_dict.pkl"
-FEATURE_STATS_JSON = MODELS_DIR / "feature_stats.json"
+TRAIN_DATA_PATH = DATA_PROCESSED_DIR / "train.parquet"
+VALID_DATA_PATH = DATA_PROCESSED_DIR / "valid.parquet"
+TEST_DATA_PATH = DATA_PROCESSED_DIR / "test.parquet"
+
+# Legacy name for compatibility during transition
+FEATURE_DATA_PATH = TRAIN_DATA_PATH
+FEATURE_STATS_JSON = SHARED_DIR / "models" / "feature_stats.json"
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 DEBUG_MODE = os.getenv("DEBUG", "True").lower() == "true"
 
-COL_STORE_NBR = "store_nbr"
-COL_ITEM_NBR = "item_nbr"
+COL_STORE_ID = "store_id"
+COL_ITEM_ID = "item_id"
 COL_UNITS = "units"
 COL_DATE = "date"

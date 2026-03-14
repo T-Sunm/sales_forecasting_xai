@@ -2,16 +2,17 @@ import time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 import pandas as pd
-import pyarrow.feather as feather
-from config import (
-    API_NAME, API_VERSION, API_HOST, API_PORT, 
-    CORS_ORIGINS, DEBUG_MODE, FEATURE_ENGINEERED_FEATHER
+from src.config import (
+    API_NAME, API_VERSION, API_HOST, API_PORT,
+    CORS_ORIGINS, DEBUG_MODE, TRAIN_DATA_PATH
 )
-from utils.logger import setup_logging, APILoggingMiddleware
-from core.model import ModelManager
-from api.routers import health, prediction, xai, models
+from src.utils.logger import setup_logging, APILoggingMiddleware
+from src.utils.db_manager import TrinoServiceError
+from src.core.model import ModelManager
+from src.api.routers import health, prediction, xai, models, data, analytics
 
 # 1. Setup Logging
 logger = setup_logging()
@@ -27,7 +28,7 @@ async def lifespan(app: FastAPI):
     success = model_manager.load_models()
     
     if success:
-        logger.info(f"✅ Models loaded successfully. Available keys: {len(model_manager.models_dict) if model_manager.models_dict else 0}")
+        logger.info("✅ Model loaded successfully.")
     else:
         logger.error("❌ Failed to load models on startup. API will assume no models available.")
         
@@ -35,19 +36,35 @@ async def lifespan(app: FastAPI):
     app.state.model_manager = model_manager
     
     # Load Feature Data (For prediction context)
-    logger.info("Loading feature engineered data...")
+    logger.info("Loading feature data...")
+    feature_data = None
+    
+    # 1. Try Trino first (Real-time from Lakehouse)
     try:
-        # Check if file exists first to avoid confusing arrow errors
-        if FEATURE_ENGINEERED_FEATHER.exists():
-            feature_data = feather.read_feather(FEATURE_ENGINEERED_FEATHER)
+        from src.utils.db_manager import fetch_ml_features
+        logger.info("Attempting to load feature data from Trino...")
+        feature_data = fetch_ml_features()
+        if not feature_data.empty:
             app.state.feature_data = feature_data
-            logger.info(f"✅ Feature data loaded successfully. Shape: {feature_data.shape}")
+            logger.info(f"✅ Feature data loaded from TRINO. Shape: {feature_data.shape}")
         else:
-            logger.error(f"❌ Feature file not found at: {FEATURE_ENGINEERED_FEATHER}")
-            app.state.feature_data = None
+            logger.warning("⚠️ Trino returned empty feature data.")
     except Exception as e:
-        logger.error(f"❌ Failed to load feature data: {str(e)}")
-        app.state.feature_data = None
+        logger.warning(f"⚠️ Trino loading failed ({str(e)}), falling back to local Parquet...")
+
+    # 2. Fallback to Local Parquet
+    if app.state.feature_data is None:
+        try:
+            if TRAIN_DATA_PATH.exists():
+                feature_data = pd.read_parquet(TRAIN_DATA_PATH)
+                app.state.feature_data = feature_data
+                logger.info(f"✅ Feature data loaded from PARQUET. Shape: {feature_data.shape}")
+            else:
+                logger.error(f"❌ Feature file not found at: {TRAIN_DATA_PATH}")
+                app.state.feature_data = None
+        except Exception as e:
+            logger.error(f"❌ Failed to load feature data from Parquet: {str(e)}")
+            app.state.feature_data = None
     
     yield
     
@@ -91,6 +108,13 @@ app.include_router(health.router)
 app.include_router(models.router)
 app.include_router(prediction.router)
 app.include_router(xai.router)
+app.include_router(data.router)
+app.include_router(analytics.router)
+
+# 7. Centralized Trino error handler  <-- "Lưới" chuyên chụp tem TrinoServiceError
+@app.exception_handler(TrinoServiceError)
+async def trino_error_handler(request: Request, exc: TrinoServiceError):
+    return JSONResponse(status_code=503, content={"detail": f"Trino error: {exc}"})
 
 # 7. Root Endpoint
 @app.get("/", tags=["General"])

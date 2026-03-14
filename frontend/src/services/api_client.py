@@ -280,6 +280,132 @@ class APIClient:
         except Exception as e:
             return {"error": str(e)}
 
+    # ==================== DATA SERVICE ENDPOINTS ====================
+
+    def get_historical_data(self, store_id: Optional[int] = None, item_id: Optional[int] = None, limit: int = 1000) -> Dict:
+        """Fetch historical data from backend"""
+        try:
+            params = {"limit": limit}
+            if store_id: params["store_id"] = store_id
+            if item_id: params["item_id"] = item_id
+            
+            response = self.session.get(f"{self.base_url}/data/historical", params=params)
+            return self._handle_response(response)
+        except Exception as e:
+            return {"data": [], "error": str(e)}
+
+    def get_top_pair(self) -> Dict:
+        """Get the store-item pair with most records from backend"""
+        try:
+            response = self.session.get(f"{self.base_url}/data/top_pair")
+            return self._handle_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+    def get_data_metadata(self) -> Dict:
+        """Get dataset metadata from backend"""
+        try:
+            response = self.session.get(f"{self.base_url}/data/metadata")
+            return self._handle_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+    def get_stores_list(self) -> List[int]:
+        """Get list of available stores"""
+        try:
+            response = self.session.get(f"{self.base_url}/data/stores")
+            res = self._handle_response(response)
+            return res.get("stores", [])
+        except Exception:
+            return []
+
+    def get_items_list(self, store_id: int) -> List[int]:
+        """Get list of items for a specific store"""
+        try:
+            response = self.session.get(f"{self.base_url}/data/items/{store_id}")
+            res = self._handle_response(response)
+            return res.get("items", [])
+        except Exception:
+            return []
+
+    # ==================== ANALYTICS ENDPOINTS ====================
+
+    def get_analytics_filters(self) -> Dict:
+        """Get date range and stores for dashboard filters"""
+        try:
+            response = self.session.get(f"{self.base_url}/analytics/filters")
+            return self._handle_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+    def get_analytics_items(self, store_id: Optional[int] = None) -> List[int]:
+        """Get items list, optionally filtered by store"""
+        try:
+            params = {}
+            if store_id: params["store_id"] = store_id
+            response = self.session.get(f"{self.base_url}/analytics/items", params=params)
+            res = self._handle_response(response)
+            return res.get("items", [])
+        except Exception:
+            return []
+
+    def get_kpis_data(self, start_date: str, end_date: str, store_id: Optional[int] = None) -> Dict:
+        """Fetch KPI metrics from backend"""
+        try:
+            params = {"start_date": start_date, "end_date": end_date}
+            if store_id: params["store_id"] = store_id
+            response = self.session.get(f"{self.base_url}/analytics/kpis", params=params)
+            return self._handle_response(response)
+        except Exception as e:
+            return {"error": str(e)}
+
+    def get_trends_data(self, start_date: str, end_date: str, store_id: Optional[int] = None) -> Dict:
+        """Fetch sales trends from backend"""
+        try:
+            params = {"start_date": start_date, "end_date": end_date}
+            if store_id: params["store_id"] = store_id
+            response = self.session.get(f"{self.base_url}/analytics/trends", params=params)
+            return self._handle_response(response)
+        except Exception as e:
+            return {"data": [], "error": str(e)}
+
+    def get_performance_data(self, start_date: str, end_date: str, store_id: Optional[int] = None) -> Dict:
+        """Fetch performance breakdown (top items/stores)"""
+        try:
+            params = {"start_date": start_date, "end_date": end_date}
+            if store_id: params["store_id"] = store_id
+            response = self.session.get(f"{self.base_url}/analytics/performance", params=params)
+            return self._handle_response(response)
+        except Exception as e:
+            return {"top_items": [], "top_stores": [], "error": str(e)}
+
+    def get_comparison_data(self, start_date: str, end_date: str, item_ids: List[int], store_id: Optional[int] = None) -> Dict:
+        """Fetch comparison data for multiple products"""
+        try:
+            params = {
+                "start_date": start_date, 
+                "end_date": end_date,
+                "item_ids": item_ids
+            }
+            if store_id: params["store_id"] = store_id
+            response = self.session.get(f"{self.base_url}/analytics/compare", params=params)
+            return self._handle_response(response)
+        except Exception as e:
+            return {"data": [], "error": str(e)}
+
+    def get_distribution_data(self, start_date: str, end_date: str, store_id: Optional[int] = None, item_id: Optional[int] = None) -> Dict:
+        """Fetch sales distribution (detailed & aggregated)"""
+        try:
+            params = {"start_date": start_date, "end_date": end_date}
+            if store_id: params["store_id"] = store_id
+            if item_id: params["item_id"] = item_id
+            
+            response = self.session.get(f"{self.base_url}/analytics/distribution", params=params)
+            return self._handle_response(response)
+        except Exception as e:
+            return {"detailed": [], "aggregated": [], "error": str(e)}
+
+
 
 # ==================== SINGLETON INSTANCE ====================
 

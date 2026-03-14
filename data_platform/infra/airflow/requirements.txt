@@ -1,0 +1,4 @@
+# Core Airflow Providers and Cosmos
+astronomer-cosmos==1.12.1
+apache-airflow-providers-apache-spark
+psycopg2-binary

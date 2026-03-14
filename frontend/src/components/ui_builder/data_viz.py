@@ -14,8 +14,8 @@ def plot_sales_forecast(
     fig, ax = plt.subplots(figsize=(12, 6))
 
     # Filter for specific store if provided
-    if store_id is not None and "store_nbr" in historical_data.columns:
-        plot_data = historical_data[historical_data["store_nbr"] == store_id].copy()
+    if store_id is not None and "store_id" in historical_data.columns:
+        plot_data = historical_data[historical_data["store_id"] == store_id].copy()
     else:
         plot_data = historical_data.copy()
 
@@ -92,7 +92,7 @@ def plot_sales_time_series(
 
     if "store_name" in filtered_data.columns and selected_store_name != "All Stores":
         ax.set_title(f"Daily Units - {selected_store_name}")
-    elif "store_nbr" in filtered_data.columns and selected_store != "All Stores":
+    elif "store_id" in filtered_data.columns and selected_store != "All Stores":
         ax.set_title(f"Daily Units - Store {selected_store}")
     else:
         ax.set_title("Daily Units - All Stores")
@@ -149,33 +149,6 @@ def plot_day_of_week_pattern(filtered_data):
     return fig
 
 
-def plot_category_distribution(filtered_data):
-    """Generate pie chart of sales by category"""
-    fig, ax = plt.subplots(figsize=(6, 6))
-
-    category_sales = (
-        filtered_data.groupby("category")["units"].sum().sort_values(ascending=False)
-    )
-
-    top_categories = category_sales.head(5)
-    others = category_sales.iloc[5:].sum() if len(category_sales) > 5 else 0
-
-    if others > 0:
-        plot_data = pd.concat([top_categories, pd.Series([others], index=["Others"])])
-    else:
-        plot_data = top_categories
-
-    plt.pie(
-        plot_data,
-        labels=plot_data.index,
-        autopct="%1.1f%%",
-        startangle=90,
-        shadow=False,
-    )
-    plt.axis("equal")
-    plt.title("Units by Category")
-
-    return fig
 
 
 def plot_store_comparison(filtered_data, store_identifier="store"):
@@ -207,7 +180,7 @@ def plot_store_comparison(filtered_data, store_identifier="store"):
     return fig
 
 
-def plot_product_comparison(filtered_data, item_identifier="item_nbr"):
+def plot_product_comparison(filtered_data, item_identifier="item_id"):
     """Generate horizontal bar chart for top products by sales"""
     fig, ax = plt.subplots(figsize=(6, 6))
 
@@ -236,27 +209,27 @@ def plot_product_comparison(filtered_data, item_identifier="item_nbr"):
     return fig
 
 
-def plot_sales_distribution(filtered_data):
-    """Generate histogram with KDE and summary statistics"""
+def plot_sales_distribution(df, col="store_day_units"):
+    """Generate histogram with KDE and summary statistics for store-day units"""
     fig, ax = plt.subplots(figsize=(10, 4))
 
     # Create histogram with KDE
-    sns.histplot(filtered_data["units"], bins=30, kde=True, ax=ax)
+    sns.histplot(df[col], bins=30, kde=True, ax=ax)
     
     # Add vertical lines for key statistics
-    median_sales = filtered_data["units"].median()
-    mean_sales = filtered_data["units"].mean()
+    median_v = df[col].median()
+    mean_v = df[col].mean()
 
     ax.axvline(
-        x=median_sales, color="r", linestyle="--", label=f"Median: {median_sales:.0f}"
+        x=median_v, color="r", linestyle="--", label=f"Median: {median_v:.0f}"
     )
     ax.axvline(
-        x=mean_sales, color="g", linestyle="--", label=f"Mean: {mean_sales:.1f}"
+        x=mean_v, color="g", linestyle="--", label=f"Mean: {mean_v:.1f}"
     )
     
-    ax.set_xlabel("Units Sold")
+    ax.set_xlabel("Units per store-day")
     ax.set_ylabel("Frequency")
-    ax.set_title("Units Distribution")
+    ax.set_title("Store-day Units Distribution")
     ax.legend()
 
     return fig
@@ -270,7 +243,7 @@ def plot_products_trend_comparison(filtered_data, selected_items):
     colors = plt.cm.tab10.colors
 
     for i, item in enumerate(selected_items):
-        item_data = filtered_data[filtered_data["item_nbr"] == item]
+        item_data = filtered_data[filtered_data["item_id"] == item]
         sales_by_date = item_data.groupby("date")["units"].sum()
         
         # Use simple color cycling
@@ -297,7 +270,7 @@ def plot_market_share_pie(filtered_data, selected_items):
     total_selected_sales = 0
     
     for item in selected_items:
-        sales = filtered_data[filtered_data["item_nbr"] == item]["units"].sum()
+        sales = filtered_data[filtered_data["item_id"] == item]["units"].sum()
         selected_sales[f"Product {item}"] = sales
         total_selected_sales += sales
     
@@ -344,7 +317,7 @@ def plot_growth_rate_comparison(filtered_data, selected_items):
     items = []
     
     for item in selected_items:
-        item_data = filtered_data[filtered_data["item_nbr"] == item]
+        item_data = filtered_data[filtered_data["item_id"] == item]
         
         first_half = item_data[item_data["date"] <= mid_date]["units"].sum()
         second_half = item_data[item_data["date"] > mid_date]["units"].sum()
@@ -374,7 +347,7 @@ def plot_growth_rate_comparison(filtered_data, selected_items):
 def plot_seasonality_heatmap(filtered_data, selected_items):
     """Generate heatmap showing sales intensity by Day of Week for selected products"""
     # Filter for selected items only
-    df = filtered_data[filtered_data["item_nbr"].isin(selected_items)].copy()
+    df = filtered_data[filtered_data["item_id"].isin(selected_items)].copy()
     
     if df.empty:
         fig, ax = plt.subplots()
@@ -388,9 +361,10 @@ def plot_seasonality_heatmap(filtered_data, selected_items):
     # Group by Product and Day
     pivot_table = df.pivot_table(
         values='units', 
-        index='item_nbr', 
+        index='item_id', 
         columns='day_of_week', 
-        aggfunc='mean'
+        aggfunc='mean',
+        observed=False
     )
     
     # Plot
@@ -410,4 +384,47 @@ def plot_seasonality_heatmap(filtered_data, selected_items):
     ax.set_ylabel("Product ID")
     ax.set_title("Seasonality Heatmap (Avg Sales by Day)")
     
+    return fig
+
+
+def plot_hist_zoom_tail(df, col, p=0.99, bins=40, kde=False):
+    """
+    Plot histogram focusing on the main distribution (up to percentile p),
+    clipping the heavy tail.
+    """
+    fig, ax = plt.subplots(figsize=(10, 4))
+
+    x = df[col].dropna()
+    
+    # Handle empty or single value case
+    if len(x) == 0:
+        return fig
+        
+    hi = x.quantile(p)
+    
+    # If p99 is 0 or very small (sparse data), show everything or just 0
+    if hi == 0:
+        hi = x.max()
+        if hi == 0: # All zeros
+             sns.histplot(x, bins=bins, kde=False, ax=ax)
+             ax.set_title(f"{col} distribution")
+             return fig
+
+    tail_cnt = int((x > hi).sum())
+    tail_pct = 100 * tail_cnt / len(x)
+
+    # Draw main part (<= p99)
+    sns.histplot(x[x <= hi], bins=bins, kde=kde, ax=ax)
+
+    ax.set_xlim(0, hi)
+    ax.set_title(f"{col} distribution (zoom <= p{int(p*100)})")
+    ax.set_xlabel(col)
+    ax.set_ylabel("Frequency")
+
+    ax.text(
+        0.99, 0.95,
+        f"Clipped: {tail_cnt} points ({tail_pct:.2f}%) > p{int(p*100)}",
+        transform=ax.transAxes,
+        ha="right", va="top"
+    )
     return fig
