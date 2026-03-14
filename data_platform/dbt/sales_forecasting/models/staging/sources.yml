@@ -1,0 +1,12 @@
+version: 2
+
+sources:
+  - name: raw
+    database: postgres
+    schema: raw
+    tables:
+      - name: raw_key
+      - name: raw_sales
+      - name: raw_weather
+      - name: raw_holidays
+      - name: raw_blackfriday
