@@ -1,11 +1,11 @@
 with source as (
-    select * from {{ source('raw', 'raw_weather') }}
+    select * from {{ source('raw', 'stg_weather') }}
 
 ),
 
 cleaned_numeric as (
     select
-        station_nbr as station_id,
+        station_id,
         cast(date as date) as date,
         
         {{ clean_weather_numeric('tmax') }} as tmax,

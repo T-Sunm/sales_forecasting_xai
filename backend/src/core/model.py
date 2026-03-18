@@ -3,18 +3,15 @@ Core Model Module - Business Logic Layer
 Separates prediction logic from UI layer for better testability and reusability.
 """
 
-import mlflow
-import mlflow.pyfunc
-from datetime import datetime, date
-from typing import Dict, Any, Optional, Tuple, List
+import joblib
+from datetime import date
+from typing import Any, Optional
 import numpy as np
 import pandas as pd
 from pydantic import BaseModel, Field, validator
 
 from src.config import (
-    MLFLOW_TRACKING_URI,
-    MLFLOW_REGISTERED_MODEL_NAME,
-    MLFLOW_MODEL_ALIAS,
+    LGBM_MODELS_PKL,
     COL_STORE_ID,
     COL_ITEM_ID,
 )
@@ -93,6 +90,7 @@ class PredictionOutput(BaseModel):
     item_id: int
     prediction_date: date
     forecast_history: Optional[pd.DataFrame] = Field(default=None, exclude=True)
+    feature_values: Optional[dict] = Field(default=None, description="Feature values used for prediction")
     error: Optional[str] = None
     
     class Config:
@@ -113,30 +111,24 @@ class ModelManager:
 
     def load_models(self) -> bool:
         """
-        Load trained model from MLflow Model Registry via @champion alias.
+        Load trained LightGBM model from local .pkl file via joblib.
 
         Returns:
             bool: True if successful, False otherwise
         """
         try:
-            mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-            model_uri = f"models:/{MLFLOW_REGISTERED_MODEL_NAME}@{MLFLOW_MODEL_ALIAS}"
-            self.model = mlflow.pyfunc.load_model(model_uri)
-            # Extract raw LightGBM booster for SHAP compatibility
-            self._model_impl = self.model._model_impl.lgb_model
+            self.model = joblib.load(LGBM_MODELS_PKL)
+            self._model_impl = self.model
             return True
         except Exception:
             return False
     
     def get_feature_names(self) -> list:
-        """Get feature names from the underlying LightGBM model."""
+        """Get feature names from the LightGBM model."""
         return self._model_impl.feature_name_
 
     def get_raw_model(self):
-        """
-        Extract the underlying LightGBM booster from MLflow PyFunc wrapper.
-        Required for SHAP TreeExplainer which cannot work with PyFunc wrappers.
-        """
+        """Return the LightGBM booster (compatible with SHAP TreeExplainer)."""
         return self._model_impl
     
     def get_model(self, store_id: int = None, item_id: int = None):
@@ -175,17 +167,19 @@ class ModelManager:
         input_row["year"] = user_data["year"]
         input_row["day_of_week"] = user_data["day_of_week"]
         input_row["is_weekend"] = user_data["is_weekend"]
+        input_row["quarter"] = (user_data["month"] - 1) // 3 + 1
         
         # Update holiday features
         input_row["is_holiday"] = user_data["is_holiday"]
         if "is_blackfriday" in input_row:
             input_row["is_blackfriday"] = user_data["is_blackfriday"]
         
-        # Update season features (one-hot encoding)
-        for s in ["Spring", "Summer", "Winter"]:
+        # Update season features (one-hot encoding, lowercase to match DB schema)
+        season_val = user_data["season"].lower()
+        for s in ["spring", "summer", "winter", "fall"]:
             col_name = f"season_{s}"
             if col_name in input_row:
-                input_row[col_name] = 1 if user_data["season"] == s else 0
+                input_row[col_name] = 1 if season_val == s else 0
         
         # Update weather numerical features
         weather_features = [
@@ -196,15 +190,16 @@ class ModelManager:
             if feature in input_row:
                 input_row[feature] = user_data[feature]
         
-        # Update weather code features (binary indicators)
-        weather_codes = [
-            'BCFG', 'BLDU', 'BLSN', 'BR', 'DU', 'DZ', 'FG', 'FU', 
-            'FZDZ', 'FZFG', 'FZRA', 'GR', 'GS', 'HZ', 'MIFG', 'PL', 'PRFG', 
-            'RA', 'SG', 'SN', 'SQ', 'TS', 'TSRA', 'TSSN', 'UP', 'VCFG', 'VCTS'
-        ]
-        for code in weather_codes:
-            if code in input_row:
-                input_row[code] = user_data.get(code, 0)
+        # Update weather code features (mapped to DB is_* column names)
+        weather_code_map = {
+            'RA': 'is_ra', 'SN': 'is_sn', 'FG': 'is_fg', 'BR': 'is_br',
+            'UP': 'is_up', 'TS': 'is_ts', 'HZ': 'is_hz', 'DZ': 'is_dz',
+            'SQ': 'is_sq', 'FZRA': 'is_fz', 'MIFG': 'is_mi', 'PRFG': 'is_pr',
+            'BCFG': 'is_bc', 'BLSN': 'is_bl', 'VCFG': 'is_vc',
+        }
+        for input_code, db_col in weather_code_map.items():
+            if db_col in input_row:
+                input_row[db_col] = user_data.get(input_code, 0)
         
         return input_row
     
@@ -264,17 +259,16 @@ class ModelManager:
             )
         
         # Check if we need recursive forecasting
-        last_historical_date = recent_samples['date'].max()
+        last_historical_date = pd.to_datetime(recent_samples['date'].max())
         target_date_pd = pd.to_datetime(prediction_input.date)
         days_gap = (target_date_pd - last_historical_date).days
         
         forecast_history = None
         
         if days_gap > 1 and use_recursive:
-            # Use recursive forecasting (now from core layer)
-            from core.forecasting import recursive_forecast
+            from src.core.forecasting import recursive_forecast
             
-            final_prediction, forecast_history = recursive_forecast(
+            final_prediction, forecast_history, final_features = recursive_forecast(
                 feature_engineered_data=feature_engineered_data,
                 model=model,
                 store_id=store_id,
@@ -286,6 +280,7 @@ class ModelManager:
                 max_forecast_days=5000
             )
             prediction_units = final_prediction
+            feature_values = final_features
             
         else:
             # Direct prediction for dates within historical range
@@ -301,6 +296,7 @@ class ModelManager:
             # Make prediction (model outputs log-transformed values)
             prediction = model.predict(X_pred)[0]
             prediction_units = np.exp(prediction)
+            feature_values = X_pred.iloc[0].to_dict()
         
         return PredictionOutput(
             prediction_value=prediction_units,
@@ -308,5 +304,6 @@ class ModelManager:
             item_id=item_id,
             prediction_date=prediction_input.date,
             forecast_history=forecast_history,
+            feature_values=feature_values,
             error=None
         )

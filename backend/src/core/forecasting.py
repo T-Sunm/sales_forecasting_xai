@@ -46,7 +46,8 @@ def get_historical_weather_average(
     target_month = target_date.month
     target_day = target_date.day
     
-    # Filter to same month/day from historical data
+    # Ensure date column is datetime to use .dt accessor
+    store_item_data['date'] = pd.to_datetime(store_item_data['date'])
     store_item_data['month_day'] = store_item_data['date'].dt.month.astype(str) + '_' + store_item_data['date'].dt.day.astype(str)
     target_month_day = f"{target_month}_{target_day}"
     
@@ -95,7 +96,7 @@ def recursive_forecast(
     prediction_inputs: dict,
     max_forecast_days: int = 365,
     progress_callback: Optional[callable] = None
-) -> Tuple[float, pd.DataFrame]:
+) -> Tuple[float, pd.DataFrame, dict]:
     """
     Perform recursive/iterative forecasting from last historical date to target date.
     
@@ -129,7 +130,7 @@ def recursive_forecast(
         raise ValueError("No historical data found for this store-item combination")
     
     # Get last historical date
-    last_historical_date = historical_data['date'].max()
+    last_historical_date = pd.to_datetime(historical_data['date'].max())
     target_date_pd = pd.to_datetime(target_date)
     
     # Calculate days to forecast
@@ -137,7 +138,7 @@ def recursive_forecast(
     
     # If target is in the past or very close, use simple prediction
     if days_to_forecast <= 1:
-        return None, None  # Signal to use simple prediction
+        return None, None, None  # Signal to use simple prediction
     
     # Safety check
     if days_to_forecast > max_forecast_days:
@@ -268,4 +269,7 @@ def recursive_forecast(
     forecast_df = pd.DataFrame(forecast_history)
     final_prediction = forecast_df.iloc[-1]['predicted_units']
     
-    return final_prediction, forecast_df
+    # Extract the features used for the final prediction
+    final_features = X_pred.iloc[0].to_dict()
+    
+    return final_prediction, forecast_df, final_features

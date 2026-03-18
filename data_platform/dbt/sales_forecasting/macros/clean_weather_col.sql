@@ -1,7 +1,8 @@
 {% macro clean_weather_numeric(column_name) %}
     case 
-        when trim({{ column_name }}) in ('M', '-', '') then null
-        when trim({{ column_name }}) = 'T' then 0.01
+        when {{ column_name }} is null then null
+        when trim({{ column_name }}::text) in ('M', '-', '') then null
+        when trim({{ column_name }}::text) = 'T' then 0.01
         else cast({{ column_name }} as numeric)
     end
 {% endmacro %}

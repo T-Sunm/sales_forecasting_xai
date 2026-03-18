@@ -16,7 +16,6 @@ TRAIN_DATA_PATH = DATA_PROCESSED_DIR / "train.parquet"
 VALID_DATA_PATH = DATA_PROCESSED_DIR / "valid.parquet"
 TEST_DATA_PATH = DATA_PROCESSED_DIR / "test.parquet"
 
-# Legacy name for compatibility during transition
 FEATURE_DATA_PATH = TRAIN_DATA_PATH
 
 LGBM_MODELS_PKL = MODELS_DIR / "lgbm_baseline.pkl"
@@ -29,10 +28,7 @@ SALES_2017_CSV = DATA_DIR / "2017_sales.csv"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 DEBUG_MODE = os.getenv("DEBUG", "True").lower() == "true"
 
-# MLflow Model Registry
-MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
-MLFLOW_REGISTERED_MODEL_NAME = os.getenv("MLFLOW_REGISTERED_MODEL_NAME", "sales-forecasting-lgbm")
-MLFLOW_MODEL_ALIAS = os.getenv("MLFLOW_MODEL_ALIAS", "champion")
+DB_SCHEMA = os.getenv("DB_SCHEMA", "marts")
 
 FEATURE_COUNT = 88
 DATE_FORMAT = "%Y-%m-%d"
@@ -47,12 +43,8 @@ API_PORT = 8000
 API_NAME = "Sales Forecasting API"
 API_VERSION = "1.0.0"
 
-# Database Configuration (Trino)
-TRINO_HOST = os.getenv("TRINO_HOST", "localhost")
-TRINO_PORT = int(os.getenv("TRINO_PORT", "8085"))
-TRINO_USER = os.getenv("TRINO_USER", "admin")
-TRINO_CATALOG = os.getenv("TRINO_CATALOG", "iceberg")
-TRINO_SCHEMA = os.getenv("TRINO_SCHEMA", "analytics")
+# Database Configuration (PostgreSQL)
+PG_DSN = os.getenv("DATABASE_URL", "postgresql://postgres:changeme@localhost:5432/sales_forecasting")
 
 SECRET_KEY = os.getenv("SECRET_KEY", "my-super-secret-key-2025")
 CORS_ORIGINS = ["*"]

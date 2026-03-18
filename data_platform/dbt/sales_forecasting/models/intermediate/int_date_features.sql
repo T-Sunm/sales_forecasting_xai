@@ -5,11 +5,11 @@ with aggregates_data as (
 ),
 
 holidays as (
-    select date from {{ source('raw', 'raw_holidays') }}
+    select date from {{ source('raw', 'stg_holidays') }}
 ),
 
 blackfridays as (
-    select date from {{ source('raw', 'raw_blackfriday') }}
+    select date from {{ source('raw', 'stg_blackfriday') }}
 ),
 
 date_features as (

@@ -244,13 +244,16 @@ class APIClient:
         item_id: int, 
         date: Optional[str] = None,
         sample_index: Optional[int] = None,
-        top_n: int = 10
+        top_n: int = 10,
+        features: Optional[dict] = None
     ) -> Optional[Dict]:
         """Get local SHAP explanation for a sample"""
         try:
-            body = {"top_n": top_n}
+            body: Dict[str, Any] = {"top_n": top_n}
             if date:
                 body["date"] = date
+            if features:
+                body["features"] = features
             if sample_index is not None:
                 body["sample_index"] = sample_index
                 
@@ -413,6 +416,7 @@ class APIClient:
 def get_api_client() -> APIClient:
     """
     Get cached API client instance (singleton pattern for Streamlit)
+    # cache invalidated
     
     Usage:
         from services import get_api_client

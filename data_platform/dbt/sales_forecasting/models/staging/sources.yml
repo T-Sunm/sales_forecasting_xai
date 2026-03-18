@@ -2,11 +2,11 @@ version: 2
 
 sources:
   - name: raw
-    database: postgres
+    database: sales_forecasting
     schema: raw
     tables:
-      - name: raw_key
-      - name: raw_sales
-      - name: raw_weather
-      - name: raw_holidays
-      - name: raw_blackfriday
+      - name: stg_key
+      - name: stg_sales
+      - name: stg_weather
+      - name: stg_holidays
+      - name: stg_blackfriday

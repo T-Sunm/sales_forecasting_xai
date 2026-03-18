@@ -10,7 +10,7 @@ from src.config import (
     CORS_ORIGINS, DEBUG_MODE, TRAIN_DATA_PATH
 )
 from src.utils.logger import setup_logging, APILoggingMiddleware
-from src.utils.db_manager import TrinoServiceError
+from src.utils.db_manager import DatabaseServiceError
 from src.core.model import ModelManager
 from src.api.routers import health, prediction, xai, models, data, analytics
 
@@ -36,21 +36,21 @@ async def lifespan(app: FastAPI):
     app.state.model_manager = model_manager
     
     # Load Feature Data (For prediction context)
-    logger.info("Loading feature data...")
+    logger.info("Loading feature data from PostgreSQL...")
     feature_data = None
-    
-    # 1. Try Trino first (Real-time from Lakehouse)
+    app.state.feature_data = None
+
+    # 1. Try PostgreSQL (primary source)
     try:
         from src.utils.db_manager import fetch_ml_features
-        logger.info("Attempting to load feature data from Trino...")
         feature_data = fetch_ml_features()
         if not feature_data.empty:
             app.state.feature_data = feature_data
-            logger.info(f"✅ Feature data loaded from TRINO. Shape: {feature_data.shape}")
+            logger.info(f"✅ Feature data loaded from PostgreSQL. Shape: {feature_data.shape}")
         else:
-            logger.warning("⚠️ Trino returned empty feature data.")
+            logger.warning("⚠️ PostgreSQL returned empty feature data.")
     except Exception as e:
-        logger.warning(f"⚠️ Trino loading failed ({str(e)}), falling back to local Parquet...")
+        logger.warning(f"⚠️ PostgreSQL loading failed ({str(e)}), falling back to local Parquet...")
 
     # 2. Fallback to Local Parquet
     if app.state.feature_data is None:
@@ -111,10 +111,10 @@ app.include_router(xai.router)
 app.include_router(data.router)
 app.include_router(analytics.router)
 
-# 7. Centralized Trino error handler  <-- "Lưới" chuyên chụp tem TrinoServiceError
-@app.exception_handler(TrinoServiceError)
-async def trino_error_handler(request: Request, exc: TrinoServiceError):
-    return JSONResponse(status_code=503, content={"detail": f"Trino error: {exc}"})
+# 7. Centralized DB error handler
+@app.exception_handler(DatabaseServiceError)
+async def db_error_handler(request: Request, exc: DatabaseServiceError):
+    return JSONResponse(status_code=503, content={"detail": f"Database error: {exc}"})
 
 # 7. Root Endpoint
 @app.get("/", tags=["General"])

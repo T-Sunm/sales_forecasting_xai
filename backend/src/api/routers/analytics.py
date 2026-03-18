@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Query, HTTPException
-from typing import Optional, List
+from typing import Optional, List, Any
 import pandas as pd
 from datetime import date, timedelta
 
@@ -7,8 +7,8 @@ from src.utils.db_manager import run_query
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
-# ── Trino table names (iceberg.analytics) ────────────────────────────────────
-_FACT = "fact_sales_item_daily"        # grain: date × store_id × item_id
+# ── PostgreSQL table names (marts schema — dbt output layer) ───────────────────
+_FACT = "marts.fact_sales_item_daily"          # grain: date × store_id × item_id
 
 # Aggregated views built inline via CTEs
 _DATE_SALES = f"""(
@@ -57,7 +57,7 @@ async def get_items(store_id: Optional[int] = None):
         )
     else:
         items_df = run_query(
-            f"SELECT DISTINCT item_id FROM {_FACT} WHERE store_id = ? ORDER BY item_id",
+            f"SELECT DISTINCT item_id FROM {_FACT} WHERE store_id = %s ORDER BY item_id",
             (store_id,)
         )
     return {"items": items_df["item_id"].tolist()}
@@ -72,11 +72,11 @@ async def get_kpis(
     """Calculate KPI metrics for the given range"""
     if store_id is None:
         grain_table = _DATE_SALES
-        where_clause = "date BETWEEN ? AND ?"
+        where_clause = "date BETWEEN %s AND %s"
         base_params = (start_date, end_date)
     else:
         grain_table = _STORE_DAY
-        where_clause = "store_id = ? AND date BETWEEN ? AND ?"
+        where_clause = "store_id = %s AND date BETWEEN %s AND %s"
         base_params = (store_id, start_date, end_date)
 
     dates = run_query(
@@ -87,13 +87,12 @@ async def get_kpis(
         return {"total_units": 0, "avg_daily": 0, "growth_pct": 0}
 
     min_d, max_d = dates.iloc[0, 0], dates.iloc[0, 1]
-    
-    # Ensure min_d and max_d are date objects for timedelta math
+
     if isinstance(min_d, str):
         min_d = date.fromisoformat(min_d)
     if isinstance(max_d, str):
         max_d = date.fromisoformat(max_d)
-        
+
     mid_d = min_d + timedelta(days=(max_d - min_d).days // 2)
 
     if store_id is None:
@@ -102,10 +101,10 @@ async def get_kpis(
                 SUM(total_units) as total_units,
                 AVG(total_units) as avg_daily,
                 SUM(sales_records) as total_records,
-                SUM(CASE WHEN date <= ? THEN total_units ELSE 0 END) as p1_units,
-                SUM(CASE WHEN date >  ? THEN total_units ELSE 0 END) as p2_units
+                SUM(CASE WHEN date <= %s THEN total_units ELSE 0 END) as p1_units,
+                SUM(CASE WHEN date >  %s THEN total_units ELSE 0 END) as p2_units
             FROM {grain_table} t
-            WHERE date BETWEEN ? AND ?
+            WHERE date BETWEEN %s AND %s
         """
         kpi_params = (mid_d, mid_d, start_date, end_date)
     else:
@@ -114,10 +113,10 @@ async def get_kpis(
                 SUM(total_units) as total_units,
                 AVG(total_units) as avg_daily,
                 SUM(sales_records) as total_records,
-                SUM(CASE WHEN date <= ? THEN total_units ELSE 0 END) as p1_units,
-                SUM(CASE WHEN date >  ? THEN total_units ELSE 0 END) as p2_units
+                SUM(CASE WHEN date <= %s THEN total_units ELSE 0 END) as p1_units,
+                SUM(CASE WHEN date >  %s THEN total_units ELSE 0 END) as p2_units
             FROM {grain_table} t
-            WHERE store_id = ? AND date BETWEEN ? AND ?
+            WHERE store_id = %s AND date BETWEEN %s AND %s
         """
         kpi_params = (mid_d, mid_d, store_id, start_date, end_date)
 
@@ -155,18 +154,18 @@ async def get_trends(
     """Get time-series trends"""
     if store_id is None:
         query = f"""
-            SELECT CAST(date AS VARCHAR) as date, SUM(units) as units
+            SELECT TO_CHAR(date, 'YYYY-MM-DD') as date, SUM(units) as units
             FROM {_FACT}
-            WHERE date BETWEEN ? AND ?
+            WHERE date BETWEEN %s AND %s
             GROUP BY date
             ORDER BY date
         """
         params = (start_date, end_date)
     else:
         query = f"""
-            SELECT CAST(date AS VARCHAR) as date, SUM(units) as units
+            SELECT TO_CHAR(date, 'YYYY-MM-DD') as date, SUM(units) as units
             FROM {_FACT}
-            WHERE store_id = ? AND date BETWEEN ? AND ?
+            WHERE store_id = %s AND date BETWEEN %s AND %s
             GROUP BY date
             ORDER BY date
         """
@@ -185,17 +184,17 @@ async def get_performance(
     """Top 10 items and stores"""
     if store_id:
         top_items = run_query(
-            f"SELECT item_id, SUM(units) as units FROM {_FACT} WHERE date BETWEEN ? AND ? AND store_id = ? GROUP BY item_id ORDER BY units DESC LIMIT 10",
+            f"SELECT item_id, SUM(units) as units FROM {_FACT} WHERE date BETWEEN %s AND %s AND store_id = %s GROUP BY item_id ORDER BY units DESC LIMIT 10",
             (start_date, end_date, store_id)
         )
     else:
         top_items = run_query(
-            f"SELECT item_id, SUM(units) as units FROM {_FACT} WHERE date BETWEEN ? AND ? GROUP BY item_id ORDER BY units DESC LIMIT 10",
+            f"SELECT item_id, SUM(units) as units FROM {_FACT} WHERE date BETWEEN %s AND %s GROUP BY item_id ORDER BY units DESC LIMIT 10",
             (start_date, end_date)
         )
 
     top_stores = run_query(
-        f"SELECT store_id, SUM(units) as units FROM {_FACT} WHERE date BETWEEN ? AND ? GROUP BY store_id ORDER BY units DESC LIMIT 10",
+        f"SELECT store_id, SUM(units) as units FROM {_FACT} WHERE date BETWEEN %s AND %s GROUP BY store_id ORDER BY units DESC LIMIT 10",
         (start_date, end_date)
     )
     return {
@@ -215,16 +214,16 @@ async def compare_products(
     item_list = ",".join(map(str, item_ids))
     if store_id:
         query = f"""
-            SELECT CAST(date AS VARCHAR) as date, item_id, units
+            SELECT TO_CHAR(date, 'YYYY-MM-DD') as date, item_id, units
             FROM {_FACT}
-            WHERE item_id IN ({item_list}) AND date BETWEEN ? AND ? AND store_id = ?
+            WHERE item_id IN ({item_list}) AND date BETWEEN %s AND %s AND store_id = %s
         """
         params = (start_date, end_date, store_id)
     else:
         query = f"""
-            SELECT CAST(date AS VARCHAR) as date, item_id, units
+            SELECT TO_CHAR(date, 'YYYY-MM-DD') as date, item_id, units
             FROM {_FACT}
-            WHERE item_id IN ({item_list}) AND date BETWEEN ? AND ?
+            WHERE item_id IN ({item_list}) AND date BETWEEN %s AND %s
         """
         params = (start_date, end_date)
 
@@ -240,14 +239,14 @@ async def get_distribution(
     item_id: Optional[int] = None
 ):
     """Get sales distribution data (Histogram)"""
-    conditions = ["date BETWEEN ? AND ?"]
-    params_list = [start_date, end_date]
+    conditions = ["date BETWEEN %s AND %s"]
+    params_list: List[Any] = [start_date, end_date]
 
     if store_id:
-        conditions.append("store_id = ?")
+        conditions.append("store_id = %s")
         params_list.append(store_id)
     if item_id:
-        conditions.append("item_id = ?")
+        conditions.append("item_id = %s")
         params_list.append(item_id)
 
     where = " AND ".join(conditions)
@@ -255,7 +254,7 @@ async def get_distribution(
 
     df1 = run_query(f"SELECT units FROM {_FACT} WHERE {where} LIMIT 10000", bound)
     df2 = run_query(
-        f"SELECT store_id, CAST(date AS VARCHAR) as date, SUM(units) as store_day_units FROM {_FACT} WHERE {where} GROUP BY store_id, date",
+        f"SELECT store_id, TO_CHAR(date, 'YYYY-MM-DD') as date, SUM(units) as store_day_units FROM {_FACT} WHERE {where} GROUP BY store_id, date",
         bound
     )
 

@@ -1,19 +1,15 @@
 with source as (
-    select * from {{ source('raw', 'raw_sales') }}
-
+    select * from {{ source('raw', 'stg_sales') }}
 ),
 
-renamed as (
-
+with_log as (
     select
-        cast(date as date) as date,
-
-        store_nbr as store_id,
-        item_nbr as item_id,
-        cast(units as integer) as units
-
+        cast(date as date)     as date,
+        store_id,
+        item_id,
+        cast(units as integer) as units,
+        ln(cast(units as float) + 1) as log_units
     from source
-
 )
 
-select * from renamed
+select * from with_log

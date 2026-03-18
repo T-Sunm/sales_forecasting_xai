@@ -23,6 +23,7 @@ class LocalExplanationRequest(BaseModel):
     date: Optional[str] = Field(None, description="Date to explain (YYYY-MM-DD)")
     sample_index: Optional[int] = Field(None, description="Sample index to explain")
     top_n: int = Field(10, description="Number of top features to return")
+    features: Optional[dict] = Field(None, description="Direct feature values to explain")
 
 
 # ==================== ENDPOINTS ====================
@@ -161,7 +162,13 @@ async def get_local_explanation(
     if store_item_data.empty:
         raise HTTPException(404, detail=f"No data found for store {store_id}, item {item_id}")
 
-    if request.date:
+    if request.features:
+        # Use directly provided features
+        X_sample = pd.DataFrame([request.features])
+        for f in feature_names:
+            if f not in X_sample.columns:
+                X_sample[f] = 0.0
+    elif request.date:
         date_data = store_item_data[store_item_data["date"] == pd.to_datetime(request.date)]
         if date_data.empty:
             raise HTTPException(404, detail=f"No data found for date {request.date}")

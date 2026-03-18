@@ -121,12 +121,14 @@ def generate_prediction(
                 historical_df["date"] = pd.to_datetime(historical_df["date"])
 
             display_prediction_results(
+                api_client,
                 prediction_value,
                 store_id,
                 item_id,
                 prediction_inputs,
                 historical_df,
                 forecast_history=None, # Backend placeholder
+                feature_values=result.get("feature_values")
             )
             
             st.success("✅ Prediction completed successfully!")
@@ -152,8 +154,8 @@ def collect_prediction_inputs():
             "Ngày dự đoán",
             value=DATASET_END,
             min_value=datetime(2012, 1, 1).date(),
-            max_value=DATASET_END + timedelta(days=14),
-            help="Giới hạn trong dataset (2012-01-01 → 2014-08-14) — chọn xa hơn sẽ chạy dự đoán đệ quy lâu hơn"
+            max_value=datetime(2024, 12, 30).date(),
+            help="Giới hạn (2012-01-01 → 2024-12-30) — chọn xa với lịch sử gốc sẽ chạy dự đoán đệ quy lâu hơn"
         )
         is_holiday = st.checkbox("Ngày lễ (Holiday)", value=False)
         is_blackfriday = st.checkbox("Black Friday", value=False)
@@ -209,12 +211,14 @@ def collect_prediction_inputs():
 
 
 def display_prediction_results(
+    api_client,
     prediction_value,
     store_id,
     item_id,
     prediction_inputs,
     historical_df,
     forecast_history=None,
+    feature_values=None
 ):
     """Display prediction results with visualizations"""
     st.header("Prediction Results")
@@ -244,11 +248,21 @@ def display_prediction_results(
     # Visualizations
     display_historical_context(historical_df, prediction_inputs.get("_date_obj"), prediction_value, forecast_history)
 
-    # Feature importance (skip if not available from API)
-    if model_features is not None and model is not None:
-        display_feature_importance(model, model_features)
-    else:
-        st.info("ℹ️ Feature importance not available via API (backend doesn't return model details yet)")
+    # Giải thích dự đoán thông qua SHAP (từ API backend)
+    st.subheader("Key Factors Influencing This Prediction (SHAP)")
+    with st.spinner("Đang tính toán Feature Importance từ Backend..."):
+        date_str = prediction_inputs.get("date")
+        if date_str and "T" in date_str:
+            date_str = date_str.split("T")[0]
+        
+        try:
+            explanation = api_client.get_local_explanation(store_id, item_id, date=date_str, top_n=8, features=feature_values)
+            if explanation and "features" in explanation:
+                display_feature_importance_api(explanation["features"])
+            else:
+                st.info("ℹ️ Feature importance not available for this prediction.")
+        except Exception as e:
+            st.warning(f"⚠️ Could not load explanation: {str(e)}")
 
 
 def display_historical_context(historical_data, prediction_date, prediction_value, forecast_history=None):
@@ -389,33 +403,38 @@ def display_weekly_pattern(recent_history, prediction_date, units_col="units"):
         st.pyplot(fig)
 
 
-def display_feature_importance(model, model_features):
-    """Display feature importance visualization"""
+def display_feature_importance_api(features_data):
+    """Display feature importance visualization using XAI Data API"""
+    if not features_data:
+        return
+        
+    # Tạo DataFrame từ JSON [{'feature': '..', 'value': .., 'shap_impact': ...}, ...]
+    importance_df = pd.DataFrame(features_data)
+    
+    if "shap_impact" not in importance_df.columns:
+        return
+        
+    # Lấy giá trị tuyệt đối để sắp xếp độ quan trọng (tác động lên hay xuống đều quan trọng)
+    importance_df["Absolute Impact"] = importance_df["shap_impact"].abs()
+    importance_df = importance_df.sort_values("Absolute Impact", ascending=False).head(8)
+    
+    # Format lại tên cho đẹp
+    importance_df["Feature"] = importance_df["feature"].apply(
+        lambda x: x.replace("_", " ").title()
+    )
 
-    if hasattr(model, "feature_importances_"):
-        st.subheader("Key Factors Influencing This Prediction")
+    # Plot
+    fig, ax = plt.subplots(figsize=(6, 2.5))
+    
+    # Đổi màu xanh/đỏ tùy theo tác động âm hay dương
+    colors = ['#2ca02c' if x > 0 else '#d62728' for x in importance_df['shap_impact']]
+    
+    sns.barplot(x="shap_impact", y="Feature", data=importance_df, ax=ax, palette=colors)
+    ax.set_title("Top SHAP Feature Impacts", fontsize=10, fontweight='bold')
+    ax.set_xlabel("Impact on Predicted Sales", fontsize=8)
+    ax.set_ylabel("")
+    plt.xticks(fontsize=8)
+    plt.yticks(fontsize=8)
+    fig.tight_layout()
 
-        # Get feature importances
-        importances = model.feature_importances_
-
-        # Create DataFrame with feature importances
-        importance_df = (
-            pd.DataFrame({"Feature": model_features, "Importance": importances})
-            .sort_values("Importance", ascending=False)
-            .head(8)
-        )
-
-        # Clean feature names for display
-        importance_df["Feature"] = importance_df["Feature"].apply(
-            lambda x: x.replace("_", " ").title()
-        )
-
-        # Plot feature importances - SMALLER SIZE
-        fig, ax = plt.subplots(figsize=(6, 2.5))  # Reduced size
-        sns.barplot(x="Importance", y="Feature", data=importance_df, ax=ax)
-        ax.set_title("Top Factors Influencing Sales Prediction")
-        plt.xticks(fontsize=8)  # Smaller font
-        plt.yticks(fontsize=8)  # Smaller font
-        fig.tight_layout()
-
-        st.pyplot(fig)
+    st.pyplot(fig)

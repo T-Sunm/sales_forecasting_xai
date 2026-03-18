@@ -1,8 +1,0 @@
-version: 2
-
-sources:
-  - name: spark_jobs
-    description: "Parquet outputs từ Spark jobs — đọc trực tiếp bằng parquet path"
-    tables:
-      - name: int_sales_with_ewma
-        description: "EWMA features từ sales_features_pipeline.py (giữ ở Spark vì applyInPandas)"
