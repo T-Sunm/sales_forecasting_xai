@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-This repository defines an integrated sales forecasting system resolving the Walmart Recruiting II Sales in Stormy Weather analytical challenge. The defining problem requires predictive algorithms to quantify how severe meteorological phenomena influence the purchasing velocity of weather-sensitive retail inventory across diverse geographic locations. The foundational training data originates directly from the official Kaggle competition registry [//www.kaggle.com/competitions/walmart-recruiting-sales-in-stormy-weather/overview].
+This repository defines an integrated sales forecasting system resolving the Walmart Recruiting II Sales in Stormy Weather analytical challenge. The defining problem requires predictive algorithms to quantify how severe meteorological phenomena influence the purchasing velocity of weather-sensitive retail inventory across diverse geographic locations. The foundational training data originates directly from the official Kaggle competition registry [//www.kaggle.com/competitions/walmart-recruiting-sales-in-stormy-weather].
 
 The technical implementation unifies a centralized data warehouse methodology with a structured Machine Learning Operations pipeline. The infrastructure relies on PostgreSQL as the foundational Relational Database Management System. Data Build Tool executes structured query logic to map raw inputs into analytical dimensional models. The machine learning sequence incorporates MLflow for framework registration tracking alongside Optuna for mathematical hyperparameter optimization. A FastAPI application serves inference payloads. A Streamlit graphical interface visualizes Explainable Artificial Intelligence interpretations.
 
