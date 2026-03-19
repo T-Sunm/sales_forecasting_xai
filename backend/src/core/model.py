@@ -289,13 +289,16 @@ class ModelManager:
             # Create DataFrame for prediction
             input_df = pd.DataFrame([input_row])
             
-            # Select only features from model signature (generic MLflow API)
+            # Select only features from model signature 
             model_features = self.get_feature_names()
-            X_pred = input_df[model_features]
+            X_pred = input_df[model_features].copy()
+            from src.config import COL_STORE_ID, COL_ITEM_ID
+            X_pred[COL_STORE_ID] = X_pred[COL_STORE_ID].astype("category")
+            X_pred[COL_ITEM_ID] = X_pred[COL_ITEM_ID].astype("category")
             
-            # Make prediction (model outputs log-transformed values)
+            # Make prediction (model outputs log1p-transformed values)
             prediction = model.predict(X_pred)[0]
-            prediction_units = np.exp(prediction)
+            prediction_units = float(np.expm1(prediction))
             feature_values = X_pred.iloc[0].to_dict()
         
         return PredictionOutput(

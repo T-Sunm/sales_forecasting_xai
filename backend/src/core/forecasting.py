@@ -55,10 +55,10 @@ def get_historical_weather_average(
     
     # Weather features to average
     weather_features = ["tmax", "cool", "preciptotal", "stnpressure", "sealevel", "resultspeed", "resultdir"]
+    # Model expects 'is_ra', 'is_sn', etc.
     weather_codes = [
-        'BCFG', 'BLDU', 'BLSN', 'BR', 'DU', 'DZ', 'FG', 'FG+', 'FU', 
-        'FZDZ', 'FZFG', 'FZRA', 'GR', 'GS', 'HZ', 'MIFG', 'PL', 'PRFG', 
-        'RA', 'SG', 'SN', 'SQ', 'TS', 'TSRA', 'TSSN', 'UP', 'VCFG', 'VCTS'
+        'is_ra', 'is_sn', 'is_fg', 'is_br', 'is_up', 'is_ts', 'is_hz', 'is_dz',
+        'is_sq', 'is_fz', 'is_mi', 'is_pr', 'is_bc', 'is_bl', 'is_vc'
     ]
     
     weather_avg = {}
@@ -181,15 +181,15 @@ def recursive_forecast(
         # Update season features
         month = current_date.month
         if month in [3, 4, 5]:
-            season = "Spring"
+            season = "spring"
         elif month in [6, 7, 8]:
-            season = "Summer"
-        elif month in [12, 1, 2]:
-            season = "Winter"
+            season = "summer"
+        elif month in [9, 10, 11]:
+            season = "fall"
         else:
-            season = "Fall"
+            season = "winter"
         
-        for s in ["Spring", "Summer", "Winter"]:
+        for s in ["spring", "summer", "fall", "winter"]:
             col_name = f"season_{s}"
             if col_name in new_row.index:
                 new_row[col_name] = 1 if season == s else 0
@@ -211,10 +211,16 @@ def recursive_forecast(
                 if feature in prediction_inputs and feature in new_row.index:
                     new_row[feature] = prediction_inputs[feature]
             
-            # Weather codes
-            for code in weather_avg.keys():
-                if code in prediction_inputs and code in new_row.index:
-                    new_row[code] = prediction_inputs[code]
+            # Weather codes mapping (from PredictionInput names to model features)
+            weather_code_map = {
+                'RA': 'is_ra', 'SN': 'is_sn', 'FG': 'is_fg', 'BR': 'is_br',
+                'UP': 'is_up', 'TS': 'is_ts', 'HZ': 'is_hz', 'DZ': 'is_dz',
+                'SQ': 'is_sq', 'FZRA': 'is_fz', 'MIFG': 'is_mi', 'PRFG': 'is_pr',
+                'BCFG': 'is_bc', 'BLSN': 'is_bl', 'VCFG': 'is_vc',
+            }
+            for input_code, model_col in weather_code_map.items():
+                if input_code in prediction_inputs and model_col in new_row.index:
+                    new_row[model_col] = prediction_inputs[input_code]
             
             # Holidays
             if 'is_holiday' in new_row.index:
@@ -223,9 +229,13 @@ def recursive_forecast(
                 new_row['is_blackfriday'] = prediction_inputs.get('is_blackfriday', 0)
         
         # Make prediction for this day
-        X_pred = pd.DataFrame([new_row])[model_features]
+        X_pred = pd.DataFrame([new_row])[model_features].copy()
+        from src.config import COL_STORE_ID, COL_ITEM_ID
+        X_pred[COL_STORE_ID] = X_pred[COL_STORE_ID].astype("category")
+        X_pred[COL_ITEM_ID] = X_pred[COL_ITEM_ID].astype("category")
+            
         prediction_log = model.predict(X_pred)[0]
-        prediction_units = np.exp(prediction_log)
+        prediction_units = np.expm1(prediction_log)
         
         # Store forecast
         forecast_history.append({
@@ -241,17 +251,23 @@ def recursive_forecast(
             new_row['units'] = prediction_units
         
         # Update lag features (if they exist in the model)
-        for lag in [1, 2, 3, 7, 14, 28]:  # Common lag values
+        # Sequence is important: update lag_k from lag_{k-1}
+        # But here we update new_row (next day) from current_row (today)
+        all_lags = [1, 2, 3, 4, 5, 6, 7, 14, 21, 28]
+        for lag in sorted(all_lags):
             lag_col = f'logunits_lag_{lag}'
             if lag_col in new_row.index:
-                # Shift: lag_1 becomes what was lag_0 (current prediction)
                 if lag == 1:
                     new_row[lag_col] = prediction_log
                 else:
-                    # Get from previous lag
+                    # Update lag_k from current_row's lag_{k-1}
                     prev_lag_col = f'logunits_lag_{lag-1}'
                     if prev_lag_col in current_row.index:
                         new_row[lag_col] = current_row[prev_lag_col]
+                    elif lag == 14: # and other large gaps
+                         # If it's a gap (like 7 -> 14), in a perfect world 
+                         # we'd use a buffer, but for now we'll just keep the value
+                         pass
         
         # Update rolling features (simplified - just shift)
         # In practice, you'd recalculate these properly

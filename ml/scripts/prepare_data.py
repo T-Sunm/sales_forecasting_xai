@@ -1,9 +1,8 @@
 import os
-from pathlib import Path
-
+import psycopg2
 import pandas as pd
 import yaml
-from trino.dbapi import connect
+from pathlib import Path
 from dotenv import load_dotenv
 
 # Project paths (absolute, calculated from script location)
@@ -13,12 +12,8 @@ SHARED_DIR = PROJECT_ROOT / "shared"
 
 load_dotenv(PROJECT_ROOT / ".env")
 
-# Trino Configuration (Match backend/src/config.py)
-TRINO_HOST = os.getenv("TRINO_HOST", "localhost")
-TRINO_PORT = int(os.getenv("TRINO_PORT", "8085"))
-TRINO_USER = os.getenv("TRINO_USER", "admin")
-TRINO_CATALOG = os.getenv("TRINO_CATALOG", "iceberg")
-TRINO_SCHEMA = os.getenv("TRINO_SCHEMA", "analytics")
+# Database Configuration using psycopg2
+PG_DSN = os.getenv("DATABASE_URL", "postgresql://postgres:changeme@localhost:5432/sales_forecasting")
 
 OUTPUT_DIR = SHARED_DIR / "data" / "processed"
 KAGGLE_TEST_CSV = SHARED_DIR / "data" / "data_raw" / "test.csv"
@@ -33,22 +28,15 @@ def load_cutoff_date():
     return params.get("prepare", {}).get("cutoff_date", "2014-08-01")
 
 
-def get_trino_connection():
-    return connect(
-        host=TRINO_HOST,
-        port=TRINO_PORT,
-        user=TRINO_USER,
-        catalog=TRINO_CATALOG,
-        schema=TRINO_SCHEMA,
-    )
+def get_connection():
+    return psycopg2.connect(PG_DSN)
 
 
 def prepare_data():
     cutoff_date = load_cutoff_date()
 
-    print(f"Connecting to Trino at {TRINO_HOST}:{TRINO_PORT}...")
+    print("Connecting to PostgreSQL...")
     
-    # Query logic inspired by backend/src/utils/db_manager.py
     query = """
     SELECT 
         -- Key / Context from Fact Sales
@@ -73,27 +61,27 @@ def prepare_data():
         d.year, d.month, d.day, d.day_of_week, d.quarter, d.is_weekend, 
         d.is_holiday, d.is_blackfriday,
         d.season_winter, d.season_spring, d.season_summer, d.season_fall
-    FROM fact_sales_item_daily f
-    JOIN fact_store_weather_daily w ON f.date = w.date AND f.store_id = w.store_id
-    JOIN dim_date d ON f.date = d.date
+    FROM marts.fact_sales_item_daily f
+    JOIN marts.fact_store_weather_daily w ON f.date = w.date AND f.store_id = w.store_id
+    JOIN marts.dim_date d ON f.date = d.date
     """
 
     try:
-        with get_trino_connection() as conn:
-            cur = conn.cursor()
-            cur.execute(query)
-            rows = cur.fetchall()
-            columns = [desc[0] for desc in cur.description]
-            df = pd.DataFrame(rows, columns=columns)
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query)
+                rows = cur.fetchall()
+                columns = [desc[0] for desc in cur.description]
+                df = pd.DataFrame(rows, columns=columns)
     except Exception as e:
-        print(f"Error querying Trino: {e}")
+        print(f"Error querying PostgreSQL: {e}")
         return
 
     df["date"] = pd.to_datetime(df["date"])
 
-    # Ensure numeric types (fetched from Trino as objects/strings sometimes)
+    # Ensure numeric types
     for col in df.columns:
-        if col not in ["date", "weather_profile_key"]:
+        if col not in ["date", "store_id", "item_id"]:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
     df = df.fillna(0)

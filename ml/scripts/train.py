@@ -9,21 +9,18 @@ import numpy as np
 import yaml
 import joblib
 import lightgbm as lgbm
-import mlflow
-from mlflow import MlflowClient
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 sys.path.append(os.getcwd())
 
-from utils.mlflow_utils import setup_mlflow
 from processing.validator import TARGET_COL, get_feature_cols
 
 PARAMS_FILE = "../shared/params.yaml"
-REGISTERED_MODEL_NAME = "sales-forecasting-lgbm"
-CHAMPION_ALIAS = "champion"
 
 
 def load_train_params(best_params_path=None):
+    if not os.path.exists(PARAMS_FILE):
+        return {}
     with open(PARAMS_FILE, "r") as f:
         all_params = yaml.safe_load(f)
     cfg = all_params.get("train", {})
@@ -38,8 +35,6 @@ def load_train_params(best_params_path=None):
 
 
 def train_logic(args):
-    # log_models=True de autolog ghi artifact model/, can de register_model() co URI hop le
-    mlflow.lightgbm.autolog(log_models=True)
     start_time = time.time()
 
     if not os.path.exists(args.train_path):
@@ -53,10 +48,15 @@ def train_logic(args):
     feature_cols = get_feature_cols(df_train.columns)
     extra_features = ["store_id", "item_id"]
 
-    X_train = df_train[feature_cols + extra_features]
+    X_train = df_train[feature_cols + extra_features].copy()
     y_train = df_train[TARGET_COL]
-    X_valid = df_valid[feature_cols + extra_features]
+    X_valid = df_valid[feature_cols + extra_features].copy()
     y_valid = df_valid[TARGET_COL]
+
+    # Ensure categorical types for LightGBM
+    for c in ["store_id", "item_id"]:
+        X_train[c] = X_train[c].astype("category")
+        X_valid[c] = X_valid[c].astype("category")
 
     cfg = load_train_params(args.best_params)
     params = {
@@ -66,14 +66,14 @@ def train_logic(args):
         "verbosity": -1,
         "num_leaves": cfg.get("num_leaves", 127),
         "learning_rate": cfg.get("learning_rate", 0.0125),
-        "feature_fraction": cfg.get("feature_fraction", 0.804),
-        "bagging_fraction": cfg.get("bagging_fraction", 0.903),
-        "bagging_freq": cfg.get("bagging_freq", 7),
-        "min_child_samples": cfg.get("min_child_samples", 42),
-        "lambda_l1": cfg.get("lambda_l1", 7.33e-08),
-        "lambda_l2": cfg.get("lambda_l2", 0.00357),
-        "max_depth": cfg.get("max_depth", 11),
-        "n_estimators": cfg.get("n_estimators", 1000),
+        "feature_fraction": cfg.get("feature_fraction", 0.8),
+        "bagging_fraction": cfg.get("bagging_fraction", 0.9),
+        "bagging_freq": cfg.get("bagging_freq", 5),
+        "min_child_samples": cfg.get("min_child_samples", 20),
+        "lambda_l1": cfg.get("lambda_l1", 0.1),
+        "lambda_l2": cfg.get("lambda_l2", 0.1),
+        "max_depth": cfg.get("max_depth", -1),
+        "n_estimators": cfg.get("n_estimators", 100),
         "random_state": cfg.get("random_state", 2025),
     }
     early_stopping_rounds = cfg.get("early_stopping_rounds", 50)
@@ -99,37 +99,15 @@ def train_logic(args):
     print(f"Validation MAE: {mae:.4f}")
     print(f"Validation RMSLE: {rmsle:.4f}")
 
-    mlflow.log_metric("val_mae", mae)
-    mlflow.log_metric("val_rmsle", rmsle)
-
     metrics = {
         "val_mae": round(mae, 6),
         "val_rmsle": round(rmsle, 6),
         "train_rows": len(df_train),
         "valid_rows": len(df_valid),
         "n_features": len(feature_cols) + len(extra_features),
-        "train_time_sec": round(train_time, 2),
+        "train_time_sec": float(f"{train_time:.2f}"),
         "best_iteration": model.best_iteration_ if hasattr(model, "best_iteration_") else params["n_estimators"],
     }
-
-    # Log model artifact (dùng autolog đã ghi, lấy run_id để register)
-    run_id = mlflow.active_run().info.run_id
-    model_uri = f"runs:/{run_id}/model"
-
-    # Register model vào Registry bằng hàm generic
-    model_version = mlflow.register_model(
-        model_uri=model_uri,
-        name=REGISTERED_MODEL_NAME,
-    )
-
-    # Gán alias @champion cho version vừa register
-    client = MlflowClient()
-    client.set_registered_model_alias(
-        name=REGISTERED_MODEL_NAME,
-        alias=CHAMPION_ALIAS,
-        version=model_version.version,
-    )
-    print(f"[OK] Registered '{REGISTERED_MODEL_NAME}' v{model_version.version} as @{CHAMPION_ALIAS}")
 
     return model, metrics
 
@@ -147,27 +125,15 @@ def save_artifacts(model, metrics, model_out, metrics_out):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--experiment-name", default="walmart-sales-baseline")
     parser.add_argument("--train-path", default="../shared/data/processed/train.parquet")
     parser.add_argument("--valid-path", default="../shared/data/processed/valid.parquet")
-    parser.add_argument("--run-name", default="lgbm_baseline_global")
     parser.add_argument("--model-out", default="../shared/models/lgbm_baseline.pkl")
     parser.add_argument("--metrics-out", default="../shared/outputs/metrics.json")
     parser.add_argument("--best-params", default=None)
+    
     args = parser.parse_args()
 
-    setup_mlflow()
-    print(f"Tracking URI: {mlflow.get_tracking_uri()}")
-
-    run = mlflow.active_run()
-    if run:
-        print(f"Using active MLflow run: {run.info.run_id}")
-        model, metrics = train_logic(args)
-    else:
-        print("Starting new MLflow session...")
-        mlflow.set_experiment(args.experiment_name)
-        with mlflow.start_run(run_name=args.run_name):
-            model, metrics = train_logic(args)
+    model, metrics = train_logic(args)
 
     if model and metrics:
         save_artifacts(model, metrics, args.model_out, args.metrics_out)

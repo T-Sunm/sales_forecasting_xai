@@ -1,14 +1,12 @@
 # Machine Learning Engineering Core
 
-> **Scope** This directory houses the core Machine Learning pipelines for the sales forecasting system. It leverages LightGBM for regression, Optuna for hyperparameter tuning, and MLflow for experiment tracking. These scripts are designed to be orchestrated by DVC from the shared directory or run locally via the mlflow CLI.
+> **Scope** This directory houses the core Machine Learning pipelines for the sales forecasting system. It leverages LightGBM for regression and Optuna for hyperparameter tuning. These scripts are designed to be orchestrated by DVC from the shared directory or run locally via `uv`.
 
 ---
 
 ## Overview
 
-The ml module standardizes the model building lifecycle using an MLproject definition. The flow covers extracting processed features from the Iceberg Gold layer via Trino. Operations include splitting data based on time cutoffs, discovering hyperparameters via Optuna, and producing a finalized LightGBM model artifact with pkl extension.
-
-Experiment tracking occurs in MLflow with nested runs for Optuna trials to maintain traceable logs.
+The ml module standardizes the model building lifecycle. The flow covers extracting processed features from the Iceberg Gold layer via Trino. Operations include splitting data based on time cutoffs, discovering hyperparameters via Optuna, and producing a finalized LightGBM model artifact with pkl extension.
 
 ---
 
@@ -16,7 +14,6 @@ Experiment tracking occurs in MLflow with nested runs for Optuna trials to maint
 
 ```
 ml/
-├── MLproject                   ← MLflow project definition (entry points)
 ├── pyproject.toml              ← Python dependencies (managed by uv)
 ├── processing/
 │   └── validator.py            ← Feature column definitions and target mapping
@@ -24,10 +21,8 @@ ml/
 │   ├── prepare_data.py         ← Trino extraction and Train/Valid/Test splitting
 │   ├── train.py                ← Final model training script
 │   └── tune.py                 ← Optuna hyperparameter study script
-├── tuning/
-│   └── objective.py            ← Optuna trial evaluation logic (nested MLflow runs)
-└── utils/
-    └── mlflow_utils.py         ← Centralised MLflow tracking URI & S3 setup
+└── tuning/
+    └── objective.py            ← Optuna trial evaluation logic
 ```
 
 ---
@@ -35,22 +30,14 @@ ml/
 ## Responsibilities
 
 1. **prepare_data** Connects to the Trino gateway to join Gold layer tables including fact_sales_item_daily and fact_store_weather_daily. This provides over 74 features for the training session and applies Kaggle test ID masking.
-2. **tune** Reads dataset files and executes an Optuna study to optimize model parameters. Each trial is logged as a child run under a parent MLflow study.
-3. **train** Fits a final LightGBM Regressor based on best parameters. The resulting model is logged to the MLflow Model Registry.
+2. **tune** Reads dataset files and executes an Optuna study to optimize model parameters.
+3. **train** Fits a final LightGBM Regressor based on best parameters.
 
 ---
 
 ## Configuration
 
 This module relies on environment variables loaded from the root `.env`.
-
-### MLflow Tracking & Artifacts
-| Variable | Usage | Default Fallback |
-|---|---|---|
-| `MLFLOW_TRACKING_URI` | Points to the MLflow tracking server | `http://127.0.0.1:5000` |
-| `MLFLOW_S3_ENDPOINT_URL` | Endpoint for MinIO (where MLflow stores artifacts) | None |
-| `AWS_ACCESS_KEY_ID` | MinIO access key for artifact upload | `minioadmin` |
-| `AWS_SECRET_ACCESS_KEY` | MinIO secret key for artifact upload | `minioadmin` |
 
 ### Lakehouse Connection Trino
 | Variable | Usage | Default |
@@ -81,21 +68,21 @@ cd ../shared
 dvc repro
 ```
 
-### Option B: Via MLflow CLI
+### Option B: Direct Execution
 
-You can run individual components defined in `MLproject`. **Note:** You MUST specify `--experiment-name` at the CLI to avoid experiment ID mismatch errors within the scripts.
+You can run individual scripts directly using `uv run`.
 
 ```fish
 cd ml
 
 # 1. Prepare data (Fetches from Lakehouse)
-$env:MLFLOW_TRACKING_URI="http://127.0.0.1:5000"; uv run mlflow run . -e prepare_data --env-manager local
+uv run scripts/prepare_data.py
 
 # 2. Run hyperparameter tuning
-$env:MLFLOW_TRACKING_URI="http://127.0.0.1:5000"; uv run mlflow run . -e tune --experiment-name "walmart-sales-tuning" --env-manager local
+uv run scripts/tune.py
 
-# 3. Train final baseline & Register model
-$env:MLFLOW_TRACKING_URI="http://127.0.0.1:5000"; uv run mlflow run . -e train --experiment-name "walmart-sales-baseline" --env-manager local
+# 3. Train final model
+uv run scripts/train.py --best-params outputs/best_params.json
 ```
 
 ---
@@ -109,7 +96,6 @@ $env:MLFLOW_TRACKING_URI="http://127.0.0.1:5000"; uv run mlflow run . -e train -
 | **`shared/data_raw/`** | ← Reads | Pulls the Kaggle `test.csv` to flag unseen base rows. |
 | **`shared/data/processed/`** | → Writes | Drops `.parquet` files for training and validation splits. |
 | **`shared/models/`** | → Writes | Serialises `lgbm_baseline.pkl` here. |
-| **MLflow Server** | → Writes | Logs experiments and registers the `@champion` model. |
 
 ---
 
@@ -119,5 +105,6 @@ $env:MLFLOW_TRACKING_URI="http://127.0.0.1:5000"; uv run mlflow run . -e train -
 |---|---|
 | [../shared/README.md](../shared/README.md) | DVC pipeline locking and artifact storage behavior. |
 | [../data_platform/dbt/README.md](../data_platform/dbt/README.md) | How the Gold Layer tables are formulated in Iceberg. |
-| [../backend/README.md](../backend/README.md) | How the API loads the `@champion` model for serving. |
+| [../backend/README.md](../backend/README.md) | How the API loads the model for serving. |
 | [../README.md](../README.md) | Root project overview and architecture. |
+

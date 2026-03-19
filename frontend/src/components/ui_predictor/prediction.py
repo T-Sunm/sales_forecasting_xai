@@ -167,18 +167,35 @@ def collect_prediction_inputs():
         preciptotal = st.slider("Lượng mưa (inch)", 0.0, 5.0, 0.0, 0.1)
 
     # Weather codes
-    with st.expander("Chọn các hiện tượng thời tiết (Weather Codes)"):
+    with st.expander("🌤️ Chọn hiện tượng thời tiết (Weather Codes)"):
+        st.caption("Chỉ chọn các mã mà mô hình AI hỗ trợ dự báo.")
         w_col1, w_col2, w_col3 = st.columns(3)
         codes = {}
+        
         with w_col1:
-            for c in ['FG', 'FG+', 'MIFG', 'PRFG', 'FZFG', 'VCFG', 'BR', 'HZ']:
-                codes[c] = st.checkbox(f"{c}", value=False)
+            st.markdown("**🌧️ Mưa & Tuyết**")
+            codes['RA'] = st.checkbox("Mưa (RA)", help="Rain")
+            codes['DZ'] = st.checkbox("Mưa phùn (DZ)", help="Drizzle")
+            codes['SN'] = st.checkbox("Tuyết (SN)", help="Snow")
+            codes['FZRA'] = st.checkbox("Mưa đóng băng (FZRA)", help="Freezing Rain")
+            codes['BLSN'] = st.checkbox("Tuyết thổi (BLSN)", help="Blowing Snow")
+
         with w_col2:
-            for c in ['RA', 'DZ', 'FZRA', 'FZDZ', 'SN', 'BLSN', 'SG', 'PL', 'GR', 'GS']:
-                codes[c] = st.checkbox(f"{c}", value=False)
+            st.markdown("**🌫️ Sương mù & Tầm nhìn**")
+            codes['FG'] = st.checkbox("Sương mù (FG)", help="Fog")
+            codes['BR'] = st.checkbox("Sương mù nhẹ (BR)", help="Mist")
+            codes['HZ'] = st.checkbox("Mù khô (HZ)", help="Haze")
+            codes['MIFG'] = st.checkbox("Sương mù nông (MIFG)", help="Shallow Fog")
+            codes['VCFG'] = st.checkbox("Sương mù lân cận (VCFG)", help="Vicinity Fog")
+
         with w_col3:
-            for c in ['TS', 'TSRA', 'TSSN', 'VCTS', 'SQ', 'DU', 'BLDU', 'FU', 'BCFG', 'UP']:
-                codes[c] = st.checkbox(f"{c}", value=False)
+            st.markdown("**⚡ Dông & Gió**")
+            codes['TS'] = st.checkbox("Dông (TS)", help="Thunderstorm")
+            codes['SQ'] = st.checkbox("Gió giật (SQ)", help="Squalls")
+            st.markdown("**Other**")
+            codes['PRFG'] = st.checkbox("Sương mù bán phần (PRFG)", help="Partial Fog")
+            codes['BCFG'] = st.checkbox("Sương mù từng đám (BCFG)", help="Patchy Fog")
+            codes['UP'] = st.checkbox("Ko xác định (UP)", help="Unknown Precipitation")
 
     st.subheader("🌡️ Áp suất & Gió")
     p_col1, p_col2, p_col3, p_col4 = st.columns(4)
