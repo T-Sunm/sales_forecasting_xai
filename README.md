@@ -1,132 +1,113 @@
-# Sales Forecasting XAI
+# Sales Forecasting Integration Framework
 
-## Overview
+## Executive Summary
 
-This repository hosts an end-to-end Walmart sales forecasting system combining a modern Lakehouse architecture with a comprehensive MLOps pipeline. The data platform leverages MinIO as the object storage, Apache Iceberg as the open table format, and Nessie as the catalog versioning. Apache Spark processes data ingestion and feature engineering while dbt and Apache Airflow orchestrate SQL transformations and pipeline scheduling. On the Machine Learning side, the pipeline utilizes DVC for data and artifact versioning, MLflow for experiment tracking, and Optuna for automated hyperparameter tuning. Model predictions and Explainable AI (XAI) insights are served through a high-performance Trino query engine, a FastAPI backend, and a Streamlit interactive dashboard.
+This repository defines an integrated sales forecasting system resolving the Walmart Recruiting II Sales in Stormy Weather analytical challenge. The defining problem requires predictive algorithms to quantify how severe meteorological phenomena influence the purchasing velocity of weather-sensitive retail inventory across diverse geographic locations. The foundational training data originates directly from the official Kaggle competition registry [//www.kaggle.com/competitions/walmart-recruiting-sales-in-stormy-weather/overview].
 
-## Architecture
+The technical implementation unifies a centralized data warehouse methodology with a structured Machine Learning Operations pipeline. The infrastructure relies on PostgreSQL as the foundational Relational Database Management System. Data Build Tool executes structured query logic to map raw inputs into analytical dimensional models. The machine learning sequence incorporates MLflow for framework registration tracking alongside Optuna for mathematical hyperparameter optimization. A FastAPI application serves inference payloads. A Streamlit graphical interface visualizes Explainable Artificial Intelligence interpretations.
 
-![Architecture Diagram](./assets/main.png)
+## Architectural Hierarchy
 
-## Repository Map
+![System Integration Architecture](assets/main.png)
 
-| Module | Role | Link |
-|---|---|---|
-| `data_platform/` | Lakehouse infrastructure and orchestration pipelines | [Read](./data_platform/README.md) |
-| ├── `infra/` | Docker services and network overview | [Read](./data_platform/infra/README.md) |
-| │ ├── `spark_minio/` | Spark cluster, MinIO storage, Iceberg configuration | [Read](./data_platform/infra/spark_minio/README.md) |
-| │ ├── `nessie/` | Nessie Catalog for Iceberg | [Read](./data_platform/infra/nessie/README.md) |
-| │ ├── `trino/` | Trino Query Engine for analytical serving | [Read](./data_platform/infra/trino/README.md) |
-| │ ├── `airflow/` | Airflow orchestration (CeleryExecutor) | [Read](./data_platform/infra/airflow/README.md) |
-| │ └── `postgres/` | Nessie and Airflow metadata database | [Read](./data_platform/infra/postgres/README.md) |
-| ├── `dbt/` | dbt data models | [Read](./data_platform/dbt/README.md) |
-| └── `spark/` | PySpark ingestion & specific feature engineering jobs | [Read](./data_platform/spark/README.md) |
-| `ml/` | ML training algorithms, Optuna tuning, MLflow tracking | [Read](./ml/README.md) |
-| `shared/` | DVC pipeline execution & shared artifacts | [Read](./shared/README.md) |
-| `backend/` | FastAPI REST API for predictions and XAI | [Read](./backend/README.md) |
-| `frontend/` | Streamlit interactive UI & dashboards | [Read](./frontend/README.md) |
-
-## Project Structure
+The physical distribution of files reflects stringent structural separation defining specific operational scopes.
 
 ```text
 sales_forecasting_xai/
-├── backend/                # FastAPI backend & routes (prediction, xai)
-├── data_platform/          # Core lakehouse, orchestration & data transformation
-│   ├── dbt/                # SQL transformation models
-│   ├── infra/              # Containerized infrastructure services
-│   ├── pipelines/          # Airflow pipelines placeholder
-│   └── spark/              # Spark job definitions & configs
-├── frontend/               # Streamlit application
-├── ml/                     # ML modeling, training (LightGBM) & Optuna pipelines
-└── shared/                 # DVC stages (dvc.yaml), parameters (params.yaml)
+├── backend/                # Application Programming Interface network endpoints
+├── data_platform/          # Database runtime and analytical query formulation
+│   ├── dbt/                # Data Build Tool dimensional transformations
+│   └── infra/              # Virtual container orchestration definitions
+├── frontend/               # Graphical interface application elements
+├── ml/                     # Machine learning algorithms and tuning matrices
+└── shared/                 # Centralized parameter targets and temporary local storage
 ```
 
-## Quickstart Local Development
+The operational domains enforce strict capability boundaries.
 
-### Assumptions & Prerequisites
+| Directory Module | Evaluated Capability |
+|---|---|
+| data_platform | Database infrastructure provisioning alongside analytical logic aggregation |
+| ml | Predictive algorithm mathematical training and modeling configurations |
+| shared | Global variable assignments enforcing parameter inheritance |
+| backend | Endpoint mapping logic distributing trained model inferences |
+| frontend | Graphical translation protocols analyzing interpretation patterns |
 
-*   **Docker & Docker Compose** are installed and running.
-*   **Python 3.10+** and the **`uv`** package manager are installed.
-*   **DVC** is available globally or within your python environment.
-*   The following ports must be free to use: `9000`, `9001` (MinIO), `5432` (Postgres), `19120` (Nessie), `7077` (Spark), `8080` (Airflow), `5000` (MLflow), `8000` (FastAPI), `8501` (Streamlit).
-*   An external Docker network named `data_platform_net` must be created before launching the services.
+## Deployment Strategy
 
-### Minimum Happy Path
+### Required Dependencies
 
-The container cluster must be started in a specific sequence to satisfy runtime dependencies starting from PostgreSQL, Nessie, Spark, MinIO, Trino, and then Airflow. Once the infrastructure is ready, the DVC pipeline runs data transformations and trains the machine learning models. Afterward, the API backend and the application UI are initialized.
+The implementation requires specific host libraries.
 
-```fish
-# 1. Create the shared external network
-docker network create data_platform_net
+* A container runtime environment
+* Python version 3.10 and above
+* The uv package manager
+* Free network ports spanning 5432 for database access and 5000 for metric tracking
+* Free network ports spanning 8000 for backend routing and 8501 for frontend display
 
-# 2. Start PostgreSQL (Metadata Store)
-cd data_platform/infra/postgres; and docker compose up -d
+### Execution Sequence
 
-# 3. Start Nessie Catalog
-cd ../nessie; and docker compose up -d
+The deployment must follow a strictly defined initialization matrix.
 
-# 4. Start Spark Cluster and MinIO
-cd ../spark_minio; and docker compose up -d
-
-# 5. Start Trino Query Engine
-cd ../trino; and docker compose up -d
-
-# 6. Initialize and start Apache Airflow
-cd ../airflow; and docker compose up airflow-init; and docker compose up -d
-
-# 6. Start the MLflow tracking server locally in a separate terminal context
-# cd ../../../../
-# set -x MLFLOW_TRACKING_URI http://127.0.0.1:5000
-# set -x MLFLOW_S3_ENDPOINT_URL http://localhost:9000
-# mlflow server --host 0.0.0.0 --port 5000
-
-# 7. Run the DVC pipeline to execute data preparation, tuning, and training stages
-cd ../../../shared; and dvc repro
-
-# 8. Start the FastAPI backend system in a separate terminal context
-cd ../backend; and uv run uvicorn src.api.main:app --reload --port 8000
-
-# 9. Start the Streamlit visualization application in a separate terminal context
-cd ../frontend; and uv run streamlit run src/app.py
+Step 1. Instantiate the PostgreSQL persistent storage.
+```bash
+cd data_platform/infra/postgres
+docker compose up -d
 ```
 
-## Environment Variables
+Step 2. Launch the MLflow tracking service.
+```bash
+mlflow server --host 127.0.0.1 --port 5000
+```
 
-The project predominantly utilizes an `.env` file located exclusively at the root directory. Below are the key environment variables identified from configuration files that should be documented:
+Step 3. Execute the data extraction and training routines.
+```bash
+cd ml
+uv run python scripts/prepare_data.py
+uv run python scripts/tune.py
+uv run python scripts/train.py --best-params outputs/best_params.json
+```
 
-| Variable | Description / Role | Expected Location |
-|---|---|---|
-| `MINIO_ACCESS_KEY` | Username / Access Key for the MinIO root user | `.env` |
-| `MINIO_SECRET_KEY` | Password / Secret Key for the MinIO root user | `.env` |
-| `MINIO_ENDPOINT` | Full HTTP endpoint URL to reach MinIO (e.g., `http://localhost:9000`) | `.env` |
-| `POSTGRES_USER` | Master username for the central Postgres instance | `.env` |
-| `POSTGRES_PASSWORD` | Master password for Postgres authentication | `.env` |
-| `POSTGRES_DB` | Default global database initialization name | `.env` |
-| `POSTGRES_HOST` | Database host string address | `.env` |
-| `POSTGRES_PORT` | Database connection port (Default: `5432`) | `.env` |
-| `MLFLOW_TRACKING_URI` | URI to log metrics and MLflow run configurations (e.g., `http://127.0.0.1:5000`) | `.env` |
-| `MLFLOW_S3_ENDPOINT_URL` | MinIO override destination endpoint for MLflow artifact storage | `.env` |
-| `AWS_ACCESS_KEY_ID` | S3-compatibility key for MLflow to connect to MinIO correctly | `.env` |
-| `AWS_SECRET_ACCESS_KEY` | S3-compatibility secret for MLflow to connect to MinIO correctly | `.env` |
-| `PGADMIN_DEFAULT_EMAIL` | Default login email for the pgAdmin database UI | docker-compose / `.env` (TODO: Verify value to expose) |
-| `PGADMIN_DEFAULT_PASSWORD` | Default login password for the pgAdmin database UI | docker-compose / `.env` (TODO: Verify value to expose) |
+Step 4. Initialize the FastAPI backend service.
+```bash
+cd backend
+uv run fastapi dev src/api/main.py --port 8000
+```
 
-> **TODO:** If DVC enforces remote registry storage (e.g., AWS S3 or MinIO), appropriate external tracking credentials will optionally need to be included. Furthermore, if Streamlit or FastAPI requires external binding reference parameters (e.g. backend host IP lookup), these variables need to be formally supplemented to `.env`.
+Step 5. Launch the Streamlit visualization interface.
+```bash
+cd frontend
+uv run streamlit run src/app.py
+```
 
-## Decision Log
+## Environment Configuration
 
-*   **Why Iceberg, Nessie, and MinIO?** Apache Iceberg facilitates core ACID transactions and schema evolutions on large data lakes. Nessie provides catalog branching features to avoid storage duplication. MinIO replicates an underlying high-performance, S3-compatible local object storage format.
-*   **Why Trino and Spark?** Apache Spark provides a robust compute engine for transformation workloads due to built-in fault tolerance. Trino enables low-latency analytical queries on the Gold layer for model training and API serving.
-*   **Why DVC, MLflow, and Optuna?** DVC tracks specific iterations for large datasets and exported model objects. MLflow centralizes training metrics metadata dashboards. Optuna automates hyperparameter sweeping alongside nested MLflow metric aggregations.
-*   **Why FastAPI and Streamlit?** FastAPI provides asynchronous endpoints to serve project predictions and Explainable AI structures. Streamlit enables the creation of real-time frontend charts for visual delivery.
+The application authenticates using variables located within the root environment configuration file.
 
-## What to Read Next
+| Environment Variable | Operational Boundary |
+|---|---|
+| POSTGRES_USER | Master username for PostgreSQL authentication |
+| POSTGRES_PASSWORD | Security key for PostgreSQL access |
+| POSTGRES_DB | Target database namespace |
+| POSTGRES_HOST | Database host network address |
+| POSTGRES_PORT | Database communication port |
+| MLFLOW_TRACKING_URI | Network path mapping the metric logging server |
 
-We invite you to onboard module-by-module to get comprehensive knowledge of the architectural breakdown:
+## Strategic Decisions
 
-1.  **[Data Platform Infrastructure](./data_platform/infra/README.md)** – Understand the initial Docker-based orchestration services integration and networking rules.
-2.  **[Airflow Orchestration Capabilities](./data_platform/infra/airflow/README.md)** – Delve into the core DAG execution layout and new asset-driven data scheduling practices.
-3.  **[Spark & MinIO Data Lake Integration](./data_platform/infra/spark_minio/README.md)** – Dive heavily into scaling Apache Iceberg concepts inside our custom cluster nodes alongside Apache Nessie table definitions.
-4.  **[dbt Implementations](./data_platform/dbt/README.md)** – Learn data warehouse modeling layers utilizing modern analytical SQL mappings conventions.
-5.  **[Shared Data Tracking & DVC Usage](./shared/README.md)** – Ascertain reproducibility techniques manipulating our parameter mappings via Data Version Control.
-6.  **[Machine Learning Engineering Core](./ml/README.md)** – Assess our deep integrations encompassing `LightGBM` regressions arrays tracked carefully amongst `Optuna` studies inside `MLflow` loops.
+The system topology reflects precise engineering decisions.
+
+* PostgreSQL and Data Build Tool. PostgreSQL provides a standard relational engine simplifying data persistence. Data Build Tool guarantees idempotency and testability for SQL transformations.
+* MLflow and Optuna. MLflow standardizes the aggregation of evaluation metrics across experiment runs. Optuna applies mathematical optimization techniques to replace exhaustive grid search matrices.
+* FastAPI and Streamlit. FastAPI implements asynchronous task execution supporting simultaneous client connections. Streamlit facilitates the mathematical translation of Explainable Artificial Intelligence matrices into visual representation charts.
+
+## Navigation Guide
+
+The repository enforces modular separation of concerns.
+
+1. Application Frontend. Evaluates the interactive components and Explainable Artificial Intelligence frameworks.
+2. Application Backend. Outlines the prediction rendering boundaries.
+3. Machine Learning Logic. Describes the pipeline constructing the LightGBM models.
+4. Database Infrastructure. Contextualizes the containerized PostgreSQL environment.
+5. Analytical Models. Delineates the Data Build Tool structured queries.
+6. Shared Resources. Identifies centralized parameter constraints and local staging records.

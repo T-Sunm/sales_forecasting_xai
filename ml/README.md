@@ -1,110 +1,98 @@
 # Machine Learning Engineering Core
 
-> **Scope** This directory houses the core Machine Learning pipelines for the sales forecasting system. It leverages LightGBM for regression and Optuna for hyperparameter tuning. These scripts are designed to be orchestrated by DVC from the shared directory or run locally via `uv`.
+> **Scope:** This directory encapsulates the core Machine Learning operational pipelines for the sales forecasting system. It leverages LightGBM for robust regression and Optuna for systematic hyperparameter tuning. These scripts are engineered to be orchestrated securely via `uv` and seamlessly integrated with MLflow for continuous model tracking and registry operations.
 
 ---
 
 ## Overview
 
-The ml module standardizes the model building lifecycle. The flow covers extracting processed features from the Iceberg Gold layer via Trino. Operations include splitting data based on time cutoffs, discovering hyperparameters via Optuna, and producing a finalized LightGBM model artifact with pkl extension.
+The `ml` module standardizes the model lifecycle operations adhering to rigorous MLOps practices. The pipeline covers extracting fully-materialized analytical features directly from the PostgreSQL warehouse (specifically encompassing the dbt `marts` layer). Subsequent operations include deterministic time-based data splitting, distributed hyperparameter optimization via Optuna, and synthesizing a finalized LightGBM predictive artifact registered iteratively into the centralized MLflow repository.
 
 ---
 
-## Directory Layout
+## Directory Architecture
 
-```
+```text
 ml/
-├── pyproject.toml              ← Python dependencies (managed by uv)
+├── pyproject.toml              ← Python dependencies and environment specifications (managed via uv)
 ├── processing/
-│   └── validator.py            ← Feature column definitions and target mapping
+│   └── validator.py            ← Feature column definitions and exact target variable mapping constraints
 ├── scripts/
-│   ├── prepare_data.py         ← Trino extraction and Train/Valid/Test splitting
-│   ├── train.py                ← Final model training script
-│   └── tune.py                 ← Optuna hyperparameter study script
+│   ├── prepare_data.py         ← PostgreSQL data extraction and temporal Train/Valid/Test set partitioning
+│   ├── train.py                ← Final model training and MLflow `@champion` alias registration
+│   └── tune.py                 ← Optuna hyperparameter study execution and metric evaluation
 └── tuning/
-    └── objective.py            ← Optuna trial evaluation logic
+    └── objective.py            ← Optuna trial evaluation logic and cross-validation analytical mechanics
 ```
 
 ---
 
-## Responsibilities
+## Core Operational Responsibilities
 
-1. **prepare_data** Connects to the Trino gateway to join Gold layer tables including fact_sales_item_daily and fact_store_weather_daily. This provides over 74 features for the training session and applies Kaggle test ID masking.
-2. **tune** Reads dataset files and executes an Optuna study to optimize model parameters.
-3. **train** Fits a final LightGBM Regressor based on best parameters.
+1. **Data Preparation (`prepare_data.py`):** Initiates connections to the PostgreSQL database to retrieve the dimensional feature tables systematically engineered by dbt. This phase strictly enforces train-test temporal splits based on the designated operational cutoff dates.
+2. **Hyperparameter Tuning (`tune.py`):** Iterates over the partitioned datasets and executes an Optuna study to optimize the LightGBM regressor's hyperparameters, efficiently tracking all studies and minimizing the loss function.
+3. **Model Training (`train.py`):** Fits the terminal LightGBM Regressor utilizing the optimal parameters empirically discovered. It serializes the model artifact and registers it directly into the active MLflow server, subsequently assigning the authoritative `@champion` alias to expedite backend consumption and scalable model serving.
 
 ---
 
-## Configuration
+## Environment Configuration
 
-This module relies on environment variables loaded from the root `.env`.
+This module derives its operational context from environment variables explicitly declared within the root `.env` repository protocol.
 
-### Lakehouse Connection Trino
-| Variable | Usage | Default |
+### Data Warehouse Integrations (PostgreSQL)
+
+| Variable | Protocol Definition | Default Fallback |
 |---|---|---|
-| `TRINO_USER` | Trino User | `admin` |
-| `TRINO_HOST` | Trino Host | `localhost` |
-| `TRINO_PORT` | Trino Port | `8085` |
-| `TRINO_CATALOG` | Iceberg Catalog | `iceberg` |
-| `TRINO_SCHEMA` | Analytics Schema | `analytics` |
+| `POSTGRES_USER` | System User Identity | `postgres` |
+| `POSTGRES_PASSWORD` | Secure Authentication | `changeme` |
+| `POSTGRES_HOST` | Target Domain / IP | `localhost` |
+| `POSTGRES_PORT` | Target Communication Port | `5432` |
+| `POSTGRES_DB` | Target Database Schema | `postgres` |
 
 ---
 
-## How to Run (Local)
+## Execution Guide (Local MLOps)
 
-The Python environment is strictly managed by `uv`.
+The Python runtime environment is strictly and deterministically provisioned by the `uv` package manager.
 
-```fish
+```powershell
+# Initialise the deterministic run environment
 cd ml
 uv sync
 ```
 
-### Option A: Via DVC (Recommended)
+### Direct Script Execution Pipeline
 
-DVC orchestrates high-level stages. Note that `prepare_data` now requires the Lakehouse services (MinIO, Nessie, Trino) to be running.
+Execute the foundational MLOps pipeline stages sequentially:
 
-```fish
-cd ../shared
-dvc repro
-```
+```powershell
+# 1. Prepare data (Extracts materializations dynamically from PostgreSQL)
+uv run python scripts/prepare_data.py
 
-### Option B: Direct Execution
+# 2. Run expansive hyperparameter optimization study
+uv run python scripts/tune.py
 
-You can run individual scripts directly using `uv run`.
-
-```fish
-cd ml
-
-# 1. Prepare data (Fetches from Lakehouse)
-uv run scripts/prepare_data.py
-
-# 2. Run hyperparameter tuning
-uv run scripts/tune.py
-
-# 3. Train final model
-uv run scripts/train.py --best-params outputs/best_params.json
+# 3. Train the final model artifact & register synchronously into MLflow
+uv run python scripts/train.py --best-params outputs/best_params.json
 ```
 
 ---
 
-## Integration Points
+## System Integration Points
 
-| Integration | Direction | Description |
+| Integration Node | Data Flow Direction | Functional Description |
 |---|---|---|
-| **Data Lakehouse (Trino)** | ← Reads | `prepare_data.py` pulls Gold Layer features from Iceberg tables. |
-| **`shared/params.yaml`** | ← Reads | Reads `cutoff_date` for splitting and base fallback parameters. |
-| **`shared/data_raw/`** | ← Reads | Pulls the Kaggle `test.csv` to flag unseen base rows. |
-| **`shared/data/processed/`** | → Writes | Drops `.parquet` files for training and validation splits. |
-| **`shared/models/`** | → Writes | Serialises `lgbm_baseline.pkl` here. |
+| **Data Warehouse (PostgreSQL)** | ← Ingest | `prepare_data.py` retrieves records directly from the materialized dbt analytical tables. |
+| **`shared/params.yaml`** | ← Ingest | Reads the deterministic `cutoff_date` for temporal splitting and foundational baseline parameters. |
+| **`shared/data/processed/`** | → Persist | Isolates local intermediate `.parquet` format checkpoints for contiguous training logic. |
+| **MLflow Registry** | → Persist | Serializes the final model payload algorithm via MLflow tracking and promotes it to production serving endpoints. |
 
 ---
 
-## Related README Files
+## Related Documentation Context
 
-| Link | Coverage |
+| Location | Coverage Context |
 |---|---|
-| [../shared/README.md](../shared/README.md) | DVC pipeline locking and artifact storage behavior. |
-| [../data_platform/dbt/README.md](../data_platform/dbt/README.md) | How the Gold Layer tables are formulated in Iceberg. |
-| [../backend/README.md](../backend/README.md) | How the API loads the model for serving. |
-| [../README.md](../README.md) | Root project overview and architecture. |
-
+| [../data_platform/dbt/README.md](../data_platform/dbt/README.md) | Outlines how analytical feature tables are computationally constructed and materialized. |
+| [../backend/README.md](../backend/README.md) | Details how the API service dynamically locates and hosts the MLflow registered model. |
+| [../README.md](../README.md) | Specifies Root system overview, extensive architectural topologies, and infrastructure strategies. |
