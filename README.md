@@ -1,4 +1,4 @@
-# Sales Forecasting Integration Framework
+# Sales Forecasting with Explainable AI (XAI)
 
 ## Executive Summary
 
