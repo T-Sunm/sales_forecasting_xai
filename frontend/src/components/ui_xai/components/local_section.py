@@ -55,7 +55,7 @@ def display_local_explanations(
         # Simple selector for API mode
         explanation_type = st.radio(
             "Select Explanation Target:",
-            ["Most Recent Prediction", "specific Date"],
+            ["Most Recent Prediction", "Specific Date"],
             horizontal=True
         )
         

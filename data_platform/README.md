@@ -85,41 +85,45 @@ docker-compose up -d
 cd infra/postgres
 docker-compose up -d
 
-# 3. Start Trino (Serving Engine)
+# 3. Start Nessie (Catalog Service)
+cd infra/nessie
+docker-compose up -d
+
+# 4. Start Trino (Serving Engine)
 cd infra/trino
 docker-compose up -d
 
-# 4. Start Airflow (Orchestrator)
+# 5. Start Airflow (Orchestrator)
 cd infra/airflow
 docker-compose up -d
 ```
 
-### 3. Load Raw Data to MinIO
+### 3. Initialize Database Metadata
+
+Once PostgreSQL is running, initialize the required databases and schemas for the Lakehouse:
 
 ```powershell
-# Load raw CSV files to Bronze layer
+# This script initializes both sales_forecasting_lakehouse and nessie databases
+uv run python infra/postgres/scripts/init_sales_forecasting.py
+```
+
+### 4. Load Raw Data to MinIO
+
+```powershell
+# Load raw CSV files to the Bronze layer
 uv run python infra/spark_minio/scripts/load_raw_data.py
 
-# Load holidays data
+# Load holidays data to the Bronze layer
 uv run python infra/spark_minio/scripts/load_holidays.py
 ```
 
-### 3. Run Spark Jobs
+### 5. Orchestrate Pipeline with Airflow
 
-```powershell
-# Staging transformation from Bronze to Silver
-spark-submit spark/jobs/staging/sales_staging.py
+The entire ETL and dbt process is orchestrated via Apache Airflow. Navigate to the Airflow UI (typically at `http://localhost:8080`).
 
-# Intermediate transformation from Silver to Gold
-spark-submit spark/jobs/intermediate/sales_features.py
-```
+**Important:** You must manually trigger the `bootstrap_nessie_namespaces` DAG first to set up the initial configurations and state. Wait for it to complete successfully.
 
-### 4. Run dbt (Manual)
-
-```powershell
-cd dbt/sales_forecasting_lakehouse
-uv run dbt run
-```
+Once the `bootstrap_nessie_namespaces` DAG finishes, you can enable and trigger the remaining analytical DAGs (e.g., Spark transformations and dbt models) from the Airflow UI.
 
 ## 📊 Data Layers
 

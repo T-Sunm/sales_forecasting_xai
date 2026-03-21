@@ -126,7 +126,8 @@ def generate_prediction(
                 item_id,
                 prediction_inputs,
                 historical_df,
-                forecast_history=None, # Backend placeholder
+                forecast_history=None,
+                feature_importances=result.get("feature_importances"),
             )
             
             st.success("✅ Prediction completed successfully!")
@@ -152,8 +153,8 @@ def collect_prediction_inputs():
             "Ngày dự đoán",
             value=DATASET_END,
             min_value=datetime(2012, 1, 1).date(),
-            max_value=DATASET_END + timedelta(days=14),
-            help="Giới hạn trong dataset (2012-01-01 → 2014-08-14) — chọn xa hơn sẽ chạy dự đoán đệ quy lâu hơn"
+            max_value=datetime(2014, 12, 31).date(),
+            help="Giới hạn trong dataset (2012-01-01 → 2014-12-31) — chọn xa hơn sẽ chạy dự đoán đệ quy lâu hơn"
         )
         is_holiday = st.checkbox("Ngày lễ (Holiday)", value=False)
         is_blackfriday = st.checkbox("Black Friday", value=False)
@@ -164,19 +165,19 @@ def collect_prediction_inputs():
         cool = st.slider("Cool (Cooling Degree Days)", 0.0, 50.0, 10.0, 0.5)
         preciptotal = st.slider("Lượng mưa (inch)", 0.0, 5.0, 0.0, 0.1)
 
-    # Weather codes
+    # Weather codes (Base flags extracted by ML Model)
     with st.expander("Chọn các hiện tượng thời tiết (Weather Codes)"):
         w_col1, w_col2, w_col3 = st.columns(3)
         codes = {}
         with w_col1:
-            for c in ['FG', 'FG+', 'MIFG', 'PRFG', 'FZFG', 'VCFG', 'BR', 'HZ']:
-                codes[c] = st.checkbox(f"{c}", value=False)
+            for c in ['RA (Mưa)', 'SN (Tuyết)', 'FG (Sương mù)', 'BR (Sương mù nhẹ)', 'UP (Không xác định)']:
+                codes[c.split()[0]] = st.checkbox(c, value=False)
         with w_col2:
-            for c in ['RA', 'DZ', 'FZRA', 'FZDZ', 'SN', 'BLSN', 'SG', 'PL', 'GR', 'GS']:
-                codes[c] = st.checkbox(f"{c}", value=False)
+            for c in ['TS (Dông)', 'HZ (Khói bụi)', 'DZ (Mưa phùn)', 'SQ (Gió giật)', 'FZ (Đóng băng)']:
+                codes[c.split()[0]] = st.checkbox(c, value=False)
         with w_col3:
-            for c in ['TS', 'TSRA', 'TSSN', 'VCTS', 'SQ', 'DU', 'BLDU', 'FU', 'BCFG', 'UP']:
-                codes[c] = st.checkbox(f"{c}", value=False)
+            for c in ['MI (Nông mỏng)', 'PR (Bộ phận)', 'BC (Từng đám)', 'BL (Cuốn)', 'VC (Lân cận)']:
+                codes[c.split()[0]] = st.checkbox(c, value=False)
 
     st.subheader("🌡️ Áp suất & Gió")
     p_col1, p_col2, p_col3, p_col4 = st.columns(4)
@@ -194,6 +195,29 @@ def collect_prediction_inputs():
     elif month in [12, 1, 2]: season = "Winter"
     else: season = "Fall"
 
+    # Map selected weather codes to backend expected binary features
+    selected_codes = [c for c, v in codes.items() if v]
+    def has_weather(target):
+        return int(any(target in c for c in selected_codes))
+
+    weather_features = {
+        "is_ra": has_weather("RA"),
+        "is_sn": has_weather("SN"),
+        "is_fg": has_weather("FG"),
+        "is_br": has_weather("BR"),
+        "is_up": has_weather("UP"),
+        "is_ts": has_weather("TS"),
+        "is_hz": has_weather("HZ"),
+        "is_dz": has_weather("DZ"),
+        "is_sq": has_weather("SQ"),
+        "is_fz": has_weather("FZ"),
+        "is_mi": has_weather("MI"),
+        "is_pr": has_weather("PR"),
+        "is_bc": has_weather("BC"),
+        "is_bl": has_weather("BL"),
+        "is_vc": has_weather("VC")
+    }
+
     inputs = {
         "date": prediction_date.isoformat(),
         "year": year, "month": month, "day": day, "day_of_week": day_of_week,
@@ -202,7 +226,7 @@ def collect_prediction_inputs():
         "tmax": tmax, "cool": cool, "preciptotal": preciptotal,
         "stnpressure": stnpressure, "sealevel": sealevel,
         "resultspeed": resultspeed, "resultdir": resultdir,
-        **{c: int(v) for c, v in codes.items()},
+        **weather_features,
         "_date_obj": prediction_date
     }
     return inputs
@@ -215,6 +239,7 @@ def display_prediction_results(
     prediction_inputs,
     historical_df,
     forecast_history=None,
+    feature_importances=None,
 ):
     """Display prediction results with visualizations"""
     st.header("Prediction Results")
@@ -245,8 +270,8 @@ def display_prediction_results(
     display_historical_context(historical_df, prediction_inputs.get("_date_obj"), prediction_value, forecast_history)
 
     # Feature importance (skip if not available from API)
-    if model_features is not None and model is not None:
-        display_feature_importance(model, model_features)
+    if feature_importances is not None:
+        display_feature_importance(feature_importances)
     else:
         st.info("ℹ️ Feature importance not available via API (backend doesn't return model details yet)")
 
@@ -389,33 +414,31 @@ def display_weekly_pattern(recent_history, prediction_date, units_col="units"):
         st.pyplot(fig)
 
 
-def display_feature_importance(model, model_features):
-    """Display feature importance visualization"""
+def display_feature_importance(importances_dict):
+    """Display feature importance visualization from dictionary"""
+    if not importances_dict:
+        return
 
-    if hasattr(model, "feature_importances_"):
-        st.subheader("Key Factors Influencing This Prediction")
+    st.subheader("Key Factors Influencing This Prediction")
+    
+    # Create DataFrame with feature importances
+    importance_df = (
+        pd.DataFrame(list(importances_dict.items()), columns=["Feature", "Importance"])
+        .sort_values("Importance", ascending=False)
+        .head(8)
+    )
 
-        # Get feature importances
-        importances = model.feature_importances_
+    # Clean feature names for display
+    importance_df["Feature"] = importance_df["Feature"].apply(
+        lambda x: str(x).replace("_", " ").title()
+    )
 
-        # Create DataFrame with feature importances
-        importance_df = (
-            pd.DataFrame({"Feature": model_features, "Importance": importances})
-            .sort_values("Importance", ascending=False)
-            .head(8)
-        )
+    # Plot feature importances - SMALLER SIZE
+    fig, ax = plt.subplots(figsize=(6, 2.5))
+    sns.barplot(x="Importance", y="Feature", data=importance_df, ax=ax)
+    ax.set_title("Top Factors Influencing Sales Prediction")
+    plt.xticks(fontsize=8)
+    plt.yticks(fontsize=8)
+    fig.tight_layout()
 
-        # Clean feature names for display
-        importance_df["Feature"] = importance_df["Feature"].apply(
-            lambda x: x.replace("_", " ").title()
-        )
-
-        # Plot feature importances - SMALLER SIZE
-        fig, ax = plt.subplots(figsize=(6, 2.5))  # Reduced size
-        sns.barplot(x="Importance", y="Feature", data=importance_df, ax=ax)
-        ax.set_title("Top Factors Influencing Sales Prediction")
-        plt.xticks(fontsize=8)  # Smaller font
-        plt.yticks(fontsize=8)  # Smaller font
-        fig.tight_layout()
-
-        st.pyplot(fig)
+    st.pyplot(fig)

@@ -37,7 +37,7 @@ async def lifespan(app: FastAPI):
     
     # Load Feature Data (For prediction context)
     logger.info("Loading feature data...")
-    feature_data = None
+    app.state.feature_data = None
     
     # 1. Try Trino first (Real-time from Lakehouse)
     try:

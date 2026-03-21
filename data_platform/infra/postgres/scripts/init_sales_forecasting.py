@@ -15,7 +15,7 @@ PG_PORT = os.environ.get("PG_PORT", "5432")
 PG_USER = os.environ.get("PG_USER", "postgres")
 PG_PASS = os.environ.get("PG_PASS", "changeme")
 
-TARGET_DB = os.environ.get("PG_DB", "sales_forecasting")
+TARGET_DB = os.environ.get("PG_DB", "sales_forecasting_lakehouse")
 ADMIN_DB = os.environ.get("PG_ADMIN_DB", "postgres")
 EXTRA_DATABASES = ["nessie"]
 

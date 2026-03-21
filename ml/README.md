@@ -1,6 +1,6 @@
 # Machine Learning Engineering Core
 
-> **Scope** This directory houses the core Machine Learning pipelines for the sales forecasting system. It leverages LightGBM for regression, Optuna for hyperparameter tuning, and MLflow for experiment tracking. These scripts are designed to be orchestrated by DVC from the shared directory or run locally via the mlflow CLI.
+> **Scope** This directory houses the core Machine Learning pipelines for the sales forecasting system. It leverages LightGBM for regression, Optuna for hyperparameter tuning, and MLflow for experiment tracking. These scripts are designed to be run locally via the MLflow CLI.
 
 ---
 
@@ -65,25 +65,26 @@ This module relies on environment variables loaded from the root `.env`.
 
 ## How to Run (Local)
 
-The Python environment is strictly managed by `uv`.
+The Python environment is strictly managed by `uv`. First, synchronize your dependencies:
 
 ```fish
 cd ml
 uv sync
 ```
 
-### Option A: Via DVC (Recommended)
+### 1. Start MLflow Tracking Server
 
-DVC orchestrates high-level stages. Note that `prepare_data` now requires the Lakehouse services (MinIO, Nessie, Trino) to be running.
+Run the MLflow server locally using SQLite as the backend store:
 
 ```fish
-cd ../shared
-dvc repro
+uv run mlflow server --backend-store-uri sqlite:///mlflow.db --host 0.0.0.0 --port 5000
 ```
 
-### Option B: Via MLflow CLI
+### 2. Run the ML Pipeline
 
-You can run individual components defined in `MLproject`. **Note:** You MUST specify `--experiment-name` at the CLI to avoid experiment ID mismatch errors within the scripts.
+You can run individual components defined in the `MLproject`.
+**Note 1:** `prepare_data` requires the Lakehouse services (MinIO, Nessie, Trino) to be running.
+**Note 2:** You MUST specify `--experiment-name` at the CLI to avoid experiment ID mismatch errors. Open a new terminal to run these steps:
 
 ```fish
 cd ml
@@ -117,7 +118,7 @@ $env:MLFLOW_TRACKING_URI="http://127.0.0.1:5000"; uv run mlflow run . -e train -
 
 | Link | Coverage |
 |---|---|
-| [../shared/README.md](../shared/README.md) | DVC pipeline locking and artifact storage behavior. |
+| [../shared/README.md](../shared/README.md) | Shared variables and artifact storage behavior. |
 | [../data_platform/dbt/README.md](../data_platform/dbt/README.md) | How the Gold Layer tables are formulated in Iceberg. |
 | [../backend/README.md](../backend/README.md) | How the API loads the `@champion` model for serving. |
 | [../README.md](../README.md) | Root project overview and architecture. |

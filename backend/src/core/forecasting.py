@@ -53,11 +53,14 @@ def get_historical_weather_average(
     historical_same_day = store_item_data[store_item_data['month_day'] == target_month_day]
     
     # Weather features to average
-    weather_features = ["tmax", "cool", "preciptotal", "stnpressure", "sealevel", "resultspeed", "resultdir"]
+    weather_features = [
+        "tmax", "tmin", "tavg", "depart", "dewpoint", "wetbulb", "heat", "cool",
+        "sunrise", "sunset", "snowfall", "preciptotal", "stnpressure", "sealevel",
+        "resultspeed", "resultdir", "avgspeed"
+    ]
     weather_codes = [
-        'BCFG', 'BLDU', 'BLSN', 'BR', 'DU', 'DZ', 'FG', 'FG+', 'FU', 
-        'FZDZ', 'FZFG', 'FZRA', 'GR', 'GS', 'HZ', 'MIFG', 'PL', 'PRFG', 
-        'RA', 'SG', 'SN', 'SQ', 'TS', 'TSRA', 'TSSN', 'UP', 'VCFG', 'VCTS'
+        'is_ra', 'is_sn', 'is_fg', 'is_br', 'is_up', 'is_ts', 'is_hz', 'is_dz', 'is_sq', 
+        'is_fz', 'is_mi', 'is_pr', 'is_bc', 'is_bl', 'is_vc'
     ]
     
     weather_avg = {}
@@ -176,19 +179,20 @@ def recursive_forecast(
         new_row['day'] = current_date.day
         new_row['day_of_week'] = current_date.dayofweek
         new_row['is_weekend'] = 1 if current_date.dayofweek >= 5 else 0
+        new_row['quarter'] = (current_date.month - 1) // 3 + 1
         
         # Update season features
         month = current_date.month
         if month in [3, 4, 5]:
-            season = "Spring"
+            season = "spring"
         elif month in [6, 7, 8]:
-            season = "Summer"
+            season = "summer"
         elif month in [12, 1, 2]:
-            season = "Winter"
+            season = "winter"
         else:
-            season = "Fall"
+            season = "fall"
         
-        for s in ["Spring", "Summer", "Winter"]:
+        for s in ["spring", "summer", "winter", "fall"]:
             col_name = f"season_{s}"
             if col_name in new_row.index:
                 new_row[col_name] = 1 if season == s else 0

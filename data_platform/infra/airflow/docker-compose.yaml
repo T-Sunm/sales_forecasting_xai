@@ -75,11 +75,11 @@ x-airflow-common:
     _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
     # The following line can be used to set a custom config file, stored in the local config folder
     AIRFLOW_CONFIG: '/opt/airflow/config/airflow.cfg'
-    AIRFLOW_CONN_POSTGRES_DW: 'postgresql://postgres:changeme@postgres_container:5432/sales_forecasting'
+    AIRFLOW_CONN_POSTGRES_DW: 'postgresql://postgres:changeme@postgres_container:5432/sales_forecasting_lakehouse'
     PG_HOST: 'postgres_container'
     PG_USER: 'postgres'
     PG_PASS: 'changeme'
-    PG_DB: 'sales_forecasting'
+    PG_DB: 'sales_forecasting_lakehouse'
     DBT_PROFILES_DIR: '/opt/airflow/dags/dbt/sales_forecasting'
   volumes:
     - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags

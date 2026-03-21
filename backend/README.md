@@ -20,7 +20,7 @@ The backend loads the model via MLflow Model Registry alias @champion. The MLflo
 
 ```bash
 # Run from ml relative to this backend folder
-cd ../ml
+cd ml
 mlflow server --backend-store-uri sqlite:///mlflow.db --host 127.0.0.1 --port 5000
 ```
 
@@ -39,7 +39,7 @@ uv run python scripts/train.py
 python run.py
 
 # Or via Uvicorn directly
-uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+uv run uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 The API documentation will be available at `http://localhost:8000/docs`.
@@ -54,7 +54,7 @@ Based on the structure at `../data_platform/infra`, you must run `docker-compose
 Storage for Iceberg Parquet files. Directory name `infra/spark_minio`
 
 ```powershell
-cd ../data_platform/infra/spark_minio
+cd data_platform/infra/spark_minio
 docker-compose up -d
 ```
 
@@ -62,7 +62,7 @@ docker-compose up -d
 Store metadata for the Nessie Catalog. Directory name `infra/postgres`
 
 ```powershell
-cd ../data_platform/infra/postgres
+cd data_platform/infra/postgres
 docker-compose up -d
 ```
 
@@ -70,7 +70,7 @@ docker-compose up -d
 REST Catalog for Iceberg table metadata management. Directory name `infra/nessie`
 
 ```powershell
-cd ../data_platform/infra/nessie
+cd data_platform/infra/nessie
 docker-compose up -d
 ```
 
@@ -78,6 +78,6 @@ docker-compose up -d
 SQL engine for high performance analytical queries. Directory name `infra/trino`
 
 ```powershell
-cd ../data_platform/infra/trino
+cd data_platform/infra/trino
 docker-compose up -d
 ```

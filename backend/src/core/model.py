@@ -47,33 +47,21 @@ class PredictionInput(BaseModel):
     resultdir: float
     
     # Weather codes (optional, defaults to 0)
-    BCFG: int = Field(default=0, ge=0, le=1)
-    BLDU: int = Field(default=0, ge=0, le=1)
-    BLSN: int = Field(default=0, ge=0, le=1)
-    BR: int = Field(default=0, ge=0, le=1)
-    DU: int = Field(default=0, ge=0, le=1)
-    DZ: int = Field(default=0, ge=0, le=1)
-    FG: int = Field(default=0, ge=0, le=1)
-    FU: int = Field(default=0, ge=0, le=1)
-    FZDZ: int = Field(default=0, ge=0, le=1)
-    FZFG: int = Field(default=0, ge=0, le=1)
-    FZRA: int = Field(default=0, ge=0, le=1)
-    GR: int = Field(default=0, ge=0, le=1)
-    GS: int = Field(default=0, ge=0, le=1)
-    HZ: int = Field(default=0, ge=0, le=1)
-    MIFG: int = Field(default=0, ge=0, le=1)
-    PL: int = Field(default=0, ge=0, le=1)
-    PRFG: int = Field(default=0, ge=0, le=1)
-    RA: int = Field(default=0, ge=0, le=1)
-    SG: int = Field(default=0, ge=0, le=1)
-    SN: int = Field(default=0, ge=0, le=1)
-    SQ: int = Field(default=0, ge=0, le=1)
-    TS: int = Field(default=0, ge=0, le=1)
-    TSRA: int = Field(default=0, ge=0, le=1)
-    TSSN: int = Field(default=0, ge=0, le=1)
-    UP: int = Field(default=0, ge=0, le=1)
-    VCFG: int = Field(default=0, ge=0, le=1)
-    VCTS: int = Field(default=0, ge=0, le=1)
+    is_ra: int = Field(default=0, ge=0, le=1)
+    is_sn: int = Field(default=0, ge=0, le=1)
+    is_fg: int = Field(default=0, ge=0, le=1)
+    is_br: int = Field(default=0, ge=0, le=1)
+    is_up: int = Field(default=0, ge=0, le=1)
+    is_ts: int = Field(default=0, ge=0, le=1)
+    is_hz: int = Field(default=0, ge=0, le=1)
+    is_dz: int = Field(default=0, ge=0, le=1)
+    is_sq: int = Field(default=0, ge=0, le=1)
+    is_fz: int = Field(default=0, ge=0, le=1)
+    is_mi: int = Field(default=0, ge=0, le=1)
+    is_pr: int = Field(default=0, ge=0, le=1)
+    is_bc: int = Field(default=0, ge=0, le=1)
+    is_bl: int = Field(default=0, ge=0, le=1)
+    is_vc: int = Field(default=0, ge=0, le=1)
     
     @validator('season')
     def validate_season(cls, v):
@@ -94,6 +82,7 @@ class PredictionOutput(BaseModel):
     prediction_date: date
     forecast_history: Optional[pd.DataFrame] = Field(default=None, exclude=True)
     error: Optional[str] = None
+    feature_importances: Optional[Dict[str, float]] = None
     
     class Config:
         arbitrary_types_allowed = True
@@ -180,12 +169,16 @@ class ModelManager:
         input_row["is_holiday"] = user_data["is_holiday"]
         if "is_blackfriday" in input_row:
             input_row["is_blackfriday"] = user_data["is_blackfriday"]
+            
+        # Update quarter
+        if "quarter" in input_row:
+            input_row["quarter"] = (user_data["month"] - 1) // 3 + 1
         
         # Update season features (one-hot encoding)
-        for s in ["Spring", "Summer", "Winter"]:
+        for s in ["spring", "summer", "winter", "fall"]:
             col_name = f"season_{s}"
             if col_name in input_row:
-                input_row[col_name] = 1 if user_data["season"] == s else 0
+                input_row[col_name] = 1 if user_data["season"].lower() == s else 0
         
         # Update weather numerical features
         weather_features = [
@@ -198,9 +191,8 @@ class ModelManager:
         
         # Update weather code features (binary indicators)
         weather_codes = [
-            'BCFG', 'BLDU', 'BLSN', 'BR', 'DU', 'DZ', 'FG', 'FU', 
-            'FZDZ', 'FZFG', 'FZRA', 'GR', 'GS', 'HZ', 'MIFG', 'PL', 'PRFG', 
-            'RA', 'SG', 'SN', 'SQ', 'TS', 'TSRA', 'TSSN', 'UP', 'VCFG', 'VCTS'
+            'is_ra', 'is_sn', 'is_fg', 'is_br', 'is_up', 'is_ts', 'is_hz', 'is_dz', 'is_sq', 
+            'is_fz', 'is_mi', 'is_pr', 'is_bc', 'is_bl', 'is_vc'
         ]
         for code in weather_codes:
             if code in input_row:
@@ -264,7 +256,7 @@ class ModelManager:
             )
         
         # Check if we need recursive forecasting
-        last_historical_date = recent_samples['date'].max()
+        last_historical_date = pd.to_datetime(recent_samples['date'].max())
         target_date_pd = pd.to_datetime(prediction_input.date)
         days_gap = (target_date_pd - last_historical_date).days
         
@@ -302,11 +294,33 @@ class ModelManager:
             prediction = model.predict(X_pred)[0]
             prediction_units = np.exp(prediction)
         
+        # Get feature importances
+        feature_importances = None
+        try:
+            model_features = self.get_feature_names()
+            impl = self._model_impl
+            
+            if impl is not None:
+                if hasattr(impl, "feature_importances_"):
+                    importances = impl.feature_importances_
+                elif hasattr(impl, "feature_importance"):
+                    importances = impl.feature_importance()
+                else:
+                    importances = None
+                    
+                if importances is not None:
+                    feature_importances = {
+                        name: float(imp) for name, imp in zip(model_features, importances)
+                    }
+        except Exception:
+            pass
+
         return PredictionOutput(
             prediction_value=prediction_units,
             store_id=store_id,
             item_id=item_id,
             prediction_date=prediction_input.date,
             forecast_history=forecast_history,
-            error=None
+            error=None,
+            feature_importances=feature_importances
         )
