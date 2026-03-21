@@ -204,6 +204,22 @@ def collect_prediction_inputs():
     with p_col3: resultspeed = st.number_input("Gió (mph)", 0.0, 50.0, 5.0)
     with p_col4: resultdir = st.number_input("Hướng (độ)", 0, 360, 180)
 
+    with st.expander("🌡️ Thông số thời tiết nâng cao (Advanced)"):
+        a_col1, a_col2, a_col3 = st.columns(3)
+        with a_col1:
+            tmin = st.number_input("Nhiệt độ tối thiểu (°F)", 0.0, 100.0, 50.0)
+            tavg = st.number_input("Nhiệt độ TB (°F)", 0.0, 105.0, 60.0)
+            depart = st.number_input("Chênh lệch TB (Depart)", -30.0, 30.0, 0.0)
+            snowfall = st.number_input("Tuyết rơi (inch)", 0.0, 20.0, 0.0)
+        with a_col2:
+            dewpoint = st.number_input("Điểm sương (°F)", -20.0, 90.0, 50.0)
+            wetbulb = st.number_input("Nhiệt độ bầu ướt (°F)", -20.0, 90.0, 55.0)
+            heat = st.number_input("Heat (Heating Degree Days)", 0.0, 50.0, 0.0)
+        with a_col3:
+            sunrise = st.number_input("Bình minh (vd 530 = 5:30)", 0.0, 2400.0, 500.0)
+            sunset = st.number_input("Hoàng hôn (vd 1830 = 18:30)", 0.0, 2400.0, 1800.0)
+            avgspeed = st.number_input("Tốc độ gió TB (mph)", 0.0, 50.0, 5.0)
+
     # Derived params
     month, day, year = prediction_date.month, prediction_date.day, prediction_date.year
     day_of_week = prediction_date.weekday()
@@ -218,9 +234,11 @@ def collect_prediction_inputs():
         "year": year, "month": month, "day": day, "day_of_week": day_of_week,
         "is_weekend": 1 if day_of_week >= 5 else 0, "season": season,
         "is_holiday": int(is_holiday), "is_blackfriday": int(is_blackfriday),
-        "tmax": tmax, "cool": cool, "preciptotal": preciptotal,
-        "stnpressure": stnpressure, "sealevel": sealevel,
-        "resultspeed": resultspeed, "resultdir": resultdir,
+        "tmax": tmax, "tmin": tmin, "tavg": tavg, "depart": depart,
+        "dewpoint": dewpoint, "wetbulb": wetbulb, "heat": heat, "cool": cool,
+        "sunrise": sunrise, "sunset": sunset, "snowfall": snowfall,
+        "preciptotal": preciptotal, "stnpressure": stnpressure, "sealevel": sealevel,
+        "resultspeed": resultspeed, "resultdir": resultdir, "avgspeed": avgspeed,
         **{c: int(v) for c, v in codes.items()},
         "_date_obj": prediction_date
     }
