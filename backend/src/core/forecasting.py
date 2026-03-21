@@ -159,6 +159,16 @@ def recursive_forecast(
     # Start from last historical row
     current_row = historical_data.iloc[-1].copy()
     
+    # Create a buffer for recent logunits to support true recursive lag and rolling updates
+    if 'logunits' in historical_data.columns:
+        logunits_buffer = list(historical_data['logunits'].dropna().tail(28).values)
+        if len(logunits_buffer) > 0 and len(logunits_buffer) < 28:
+            logunits_buffer = [logunits_buffer[0]] * (28 - len(logunits_buffer)) + logunits_buffer
+        elif len(logunits_buffer) == 0:
+            logunits_buffer = [0.0] * 28
+    else:
+        logunits_buffer = [0.0] * 28
+        
     # Forecast day by day
     for day_offset in range(1, days_to_forecast + 1):
         current_date = last_historical_date + pd.Timedelta(days=day_offset)
@@ -250,33 +260,29 @@ def recursive_forecast(
         if 'units' in new_row.index:
             new_row['units'] = prediction_units
         
-        # Update lag features (if they exist in the model)
-        # Sequence is important: update lag_k from lag_{k-1}
-        # But here we update new_row (next day) from current_row (today)
+        # Add the new prediction to our buffer
+        logunits_buffer.append(prediction_log)
+        
+        # Update lag features using the exact buffer array
         all_lags = [1, 2, 3, 4, 5, 6, 7, 14, 21, 28]
-        for lag in sorted(all_lags):
+        for lag in all_lags:
             lag_col = f'logunits_lag_{lag}'
             if lag_col in new_row.index:
-                if lag == 1:
-                    new_row[lag_col] = prediction_log
-                else:
-                    # Update lag_k from current_row's lag_{k-1}
-                    prev_lag_col = f'logunits_lag_{lag-1}'
-                    if prev_lag_col in current_row.index:
-                        new_row[lag_col] = current_row[prev_lag_col]
-                    elif lag == 14: # and other large gaps
-                         # If it's a gap (like 7 -> 14), in a perfect world 
-                         # we'd use a buffer, but for now we'll just keep the value
-                         pass
+                # The latest prediction we just appended is at logunits_buffer[-1]
+                new_row[lag_col] = logunits_buffer[-lag]
         
-        # Update rolling features (simplified - just shift)
-        # In practice, you'd recalculate these properly
+        # Update rolling features accurately from buffer
         for window in [7, 14, 28]:
-            for stat in ['mean', 'min', 'max', 'std']:
-                col_name = f'logunits_{stat}_{window}d'
-                if col_name in new_row.index:
-                    # Keep the value (in real implementation, recalculate from history)
-                    pass
+            recent_vals = logunits_buffer[-window:]
+            if len(recent_vals) > 0:
+                if f'roll_avg_{window}d' in new_row.index:
+                    new_row[f'roll_avg_{window}d'] = float(np.mean(recent_vals))
+                if f'roll_min_{window}d' in new_row.index:
+                    new_row[f'roll_min_{window}d'] = float(np.min(recent_vals))
+                if f'roll_max_{window}d' in new_row.index:
+                    new_row[f'roll_max_{window}d'] = float(np.max(recent_vals))
+                if f'roll_std_{window}d' in new_row.index:
+                    new_row[f'roll_std_{window}d'] = float(np.std(recent_vals, ddof=1)) if len(recent_vals) > 1 else 0.0
         
         # Update current row for next iteration
         current_row = new_row

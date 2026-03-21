@@ -36,12 +36,22 @@ class PredictionInput(BaseModel):
     
     # Weather features
     tmax: float
+    tmin: float
+    tavg: float
+    depart: float
+    dewpoint: float
+    wetbulb: float
+    heat: float
     cool: float
+    sunrise: float
+    sunset: float
+    snowfall: float
     preciptotal: float
     stnpressure: float
     sealevel: float
     resultspeed: float
     resultdir: float
+    avgspeed: float
     
     # Weather codes (optional, defaults to 0)
     BCFG: int = Field(default=0, ge=0, le=1)
@@ -183,8 +193,9 @@ class ModelManager:
         
         # Update weather numerical features
         weather_features = [
-            "tmax", "cool", "preciptotal", 
-            "stnpressure", "sealevel", "resultspeed", "resultdir"
+            "tmax", "tmin", "tavg", "depart", "dewpoint", "wetbulb", "heat", "cool",
+            "sunrise", "sunset", "snowfall", "preciptotal", 
+            "stnpressure", "sealevel", "resultspeed", "resultdir", "avgspeed"
         ]
         for feature in weather_features:
             if feature in input_row:
